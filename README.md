@@ -4,12 +4,15 @@ dnsutil
 a dns util support RFC1035
 
 Compile:
-  make
+
+    make
 
 Usage:
+
     ./dnsc [-t type] [-s dnsserver] domain
 
-Example
+Example:
+
     ./dnsc www.google.com
     ./dnsc -t AAAA www.google.com
     ./dnsc -t A www.google.com
