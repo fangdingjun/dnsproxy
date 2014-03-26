@@ -1,0 +1,7 @@
+project(dnsutil)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall")
+#set(CMAKE_LD_FLAGS "${CMAKE_LD_FLAGS} -ldnsutil -L.")
+add_executable(dnsc dnsc.c)
+add_library(dnsutil dnsutil.c)
+link_directories(.)
+target_link_libraries(dnsc dnsutil)
