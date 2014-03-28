@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 import dnslib
 import select
 import socket
@@ -6,11 +9,23 @@ import struct
 import threading
 import traceback
 import time
+import logging
+class myfile:
+    def __init__(self,filename):
+        self.log=logging.getLogger("mylogger")
+        self.log.setLevel(logging.DEBUG)
+        fh=logging.FileHandler(filename)
+        fh.setLevel(logging.DEBUG)
+        format=logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        fh.setFormatter(format)
+        self.log.addHandler(fh)
+    def write(self,txt):
+        self.log.info(txt)
 
 class DnsProxy:
     def __init__(self):
         self.sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM,0)
-        self.sock.bind(("127.0.0.1",53))
+        self.sock.bind(("0.0.0.0",53))
         self.servers=["8.8.8.8", "4.2.2.2", "8.8.4.4", "182.16.230.98",
                 "111.68.8.179","208.67.222.222","208.67.220.220" ,
                 ]
@@ -41,7 +56,7 @@ class DnsProxy:
                     self.recv_q.put((buf,addr))
                 self.pending.append((buf,addr,time.time()))
     def forward_to_server(self,srv):
-        print "create thread for", srv
+        print "create thread for %s" % srv
         sock=None
         while True:
             buf,addr=self.recv_q.get() 
@@ -78,15 +93,18 @@ class DnsProxy:
     def send_to_client(self):
         while True:
             buf=self.recv_q2.get()
+            if len(buf) < 12:
+                continue
             try:
                 msg1=dnslib.DNSRecord().parse(buf)
             except:
                 traceback.print_exc()
-                print len(self.pending)
                 continue
             try:
                 t1=time.time()
                 for b,addr,t in self.pending:
+                    if len(b) < 12:
+                        continue
                     if (t1-t) > 2:
                         self.pending.remove((b,addr,t))
                         continue
@@ -98,5 +116,11 @@ class DnsProxy:
                 traceback.print_exc()
 
 if __name__ == "__main__":
+    import sys
+    new_fd=myfile("/tmp/dnsproxy.log")
+    sys.stdout=new_fd
+    sys.stderr=new_fd
+    new_fd.write('aaaaaaa\n')
+    new_fd.write('bbbbb\n')
     d=DnsProxy()
     d.start()
