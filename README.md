@@ -1,11 +1,24 @@
 dnsutil
 =======
 
-a dns util support RFC1035
+a dns util
+
+dns server
+
+dnsproxy.py
+
+    sudo python dnsproxy.py
+
+    test  with this command
+        dig @127.0.0.1 twitter.com
+    
+    set your dns to 127.0.0.
 
 Compile:
 
     make
+
+dnsclient
 
 Usage:
 
