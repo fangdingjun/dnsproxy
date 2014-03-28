@@ -1,39 +1,40 @@
+dnsutil
+=======
 
-the dnsclient in c subdirectory write by c, do basic dns query
-the dnsserver in python subdirectory write by python, the server forward the dns query to upstream server by tcp
+there a two part, a dns client write by c, a dns proxy server write by python
 
-dns server
-=========
+the dns proxy server forward the dns query to the upstream dns server by tcp
 
-    dnsproxy.py
-        cd python
-        sudo python dnsproxy.py
+##dns server
+
+###dnsproxy.py
+    cd python
+    sudo python dnsproxy.py
         
-        test the server with this command:
+test the server with this command:
+
+    dig @127.0.0.1 twitter.com
             
-            dig @127.0.0.1 twitter.com
-            
-    you can set your dns to 127.0.0.1
+you can set your system dns to 127.0.0.1
 
-dnsclient
-========
-
-    Compile:
-
-        cd c/
-        
-        make
+###dnsclient
 
 
-    Usage:
+Compile:
 
-        ./dnsc [-t type] [-s dnsserver] domain
+    cd c/
+    make
 
-    Example:
 
-        ./dnsc www.google.com
-        ./dnsc -t AAAA www.google.com
-        ./dnsc -t A www.google.com
-        ./dnsc -s 8.8.8.8 www.google.com
-        ./dnsc -s 4.2.2.2 www.google.com
-        ./dnsc -t MX gmail.com
+Usage:
+
+    ./dnsc [-t type] [-s dnsserver] domain
+
+Example:
+
+    ./dnsc www.google.com
+    ./dnsc -t AAAA www.google.com
+    ./dnsc -t A www.google.com
+    ./dnsc -s 8.8.8.8 www.google.com
+    ./dnsc -s 4.2.2.2 www.google.com
+    ./dnsc -t MX gmail.com
