@@ -115,6 +115,19 @@ dnsc/fast:
 .PHONY : dnsc/fast
 
 #=============================================================================
+# Target rules for targets named dnssrv
+
+# Build rule for target.
+dnssrv: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 dnssrv
+.PHONY : dnssrv
+
+# fast build rule for target.
+dnssrv/fast:
+	$(MAKE) -f CMakeFiles/dnssrv.dir/build.make CMakeFiles/dnssrv.dir/build
+.PHONY : dnssrv/fast
+
+#=============================================================================
 # Target rules for targets named dnsutil
 
 # Build rule for target.
@@ -127,35 +140,77 @@ dnsutil/fast:
 	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/build
 .PHONY : dnsutil/fast
 
-# target to build an object file
-dnsc.o:
-	$(MAKE) -f CMakeFiles/dnsc.dir/build.make CMakeFiles/dnsc.dir/dnsc.o
+dnsc.o: dnsc.c.o
 .PHONY : dnsc.o
 
-# target to preprocess a source file
-dnsc.i:
-	$(MAKE) -f CMakeFiles/dnsc.dir/build.make CMakeFiles/dnsc.dir/dnsc.i
+# target to build an object file
+dnsc.c.o:
+	$(MAKE) -f CMakeFiles/dnsc.dir/build.make CMakeFiles/dnsc.dir/dnsc.c.o
+.PHONY : dnsc.c.o
+
+dnsc.i: dnsc.c.i
 .PHONY : dnsc.i
 
-# target to generate assembly for a file
-dnsc.s:
-	$(MAKE) -f CMakeFiles/dnsc.dir/build.make CMakeFiles/dnsc.dir/dnsc.s
+# target to preprocess a source file
+dnsc.c.i:
+	$(MAKE) -f CMakeFiles/dnsc.dir/build.make CMakeFiles/dnsc.dir/dnsc.c.i
+.PHONY : dnsc.c.i
+
+dnsc.s: dnsc.c.s
 .PHONY : dnsc.s
 
+# target to generate assembly for a file
+dnsc.c.s:
+	$(MAKE) -f CMakeFiles/dnsc.dir/build.make CMakeFiles/dnsc.dir/dnsc.c.s
+.PHONY : dnsc.c.s
+
+dnssrv.o: dnssrv.c.o
+.PHONY : dnssrv.o
+
 # target to build an object file
-dnsutil.o:
-	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/dnsutil.o
-.PHONY : dnsutil.o
+dnssrv.c.o:
+	$(MAKE) -f CMakeFiles/dnssrv.dir/build.make CMakeFiles/dnssrv.dir/dnssrv.c.o
+.PHONY : dnssrv.c.o
+
+dnssrv.i: dnssrv.c.i
+.PHONY : dnssrv.i
 
 # target to preprocess a source file
-dnsutil.i:
-	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/dnsutil.i
-.PHONY : dnsutil.i
+dnssrv.c.i:
+	$(MAKE) -f CMakeFiles/dnssrv.dir/build.make CMakeFiles/dnssrv.dir/dnssrv.c.i
+.PHONY : dnssrv.c.i
+
+dnssrv.s: dnssrv.c.s
+.PHONY : dnssrv.s
 
 # target to generate assembly for a file
-dnsutil.s:
-	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/dnsutil.s
+dnssrv.c.s:
+	$(MAKE) -f CMakeFiles/dnssrv.dir/build.make CMakeFiles/dnssrv.dir/dnssrv.c.s
+.PHONY : dnssrv.c.s
+
+dnsutil.o: dnsutil.c.o
+.PHONY : dnsutil.o
+
+# target to build an object file
+dnsutil.c.o:
+	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/dnsutil.c.o
+.PHONY : dnsutil.c.o
+
+dnsutil.i: dnsutil.c.i
+.PHONY : dnsutil.i
+
+# target to preprocess a source file
+dnsutil.c.i:
+	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/dnsutil.c.i
+.PHONY : dnsutil.c.i
+
+dnsutil.s: dnsutil.c.s
 .PHONY : dnsutil.s
+
+# target to generate assembly for a file
+dnsutil.c.s:
+	$(MAKE) -f CMakeFiles/dnsutil.dir/build.make CMakeFiles/dnsutil.dir/dnsutil.c.s
+.PHONY : dnsutil.c.s
 
 # Help Target
 help:
@@ -164,12 +219,16 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... dnsc"
+	@echo "... dnssrv"
 	@echo "... dnsutil"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... dnsc.o"
 	@echo "... dnsc.i"
 	@echo "... dnsc.s"
+	@echo "... dnssrv.o"
+	@echo "... dnssrv.i"
+	@echo "... dnssrv.s"
 	@echo "... dnsutil.o"
 	@echo "... dnsutil.i"
 	@echo "... dnsutil.s"
