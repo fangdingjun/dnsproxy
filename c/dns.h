@@ -1,20 +1,20 @@
 #include <stdint.h>
 #ifndef DNS_H
 #define DNS_H
-struct msg_header{
+struct msg_header {
     uint16_t id;
-    /*flags*/
+    /*flags */
     uint16_t flags;
-    /*number of entries in the question section*/
+    /*number of entries in the question section */
     uint16_t qdcount;
-    /*number of resource records in answer section*/
+    /*number of resource records in answer section */
     uint16_t ancount;
-    /*number of name server resource in authority record section*/
+    /*number of name server resource in authority record section */
     uint16_t nscount;
-    /*number of resource records in additional section*/
+    /*number of resource records in additional section */
     uint16_t arcount;
 };
-struct dns_rr{
+struct dns_rr {
     char *name;
     uint16_t type;
     uint16_t cls;
@@ -24,13 +24,13 @@ struct dns_rr{
     struct dns_rr *next;
 };
 
-struct mx_rdata{
+struct mx_rdata {
     uint16_t preference;
     char *domain;
 };
-struct dns_msg{
+struct dns_msg {
     struct msg_header *hdr;
-    char *buf; //pointer the raw message
+    char *buf;                  //pointer the raw message
     int msg_len;
     int hdr_len;
     int qd_len;
@@ -48,12 +48,13 @@ void free_dns_msg(struct dns_msg *m);
 
 void dump_header(char *buf);
 size_t set_qname(char *dest, char *dname);
-size_t parse_rr(char *start,size_t offset, size_t ncount, struct dns_rr **res);
-size_t parse_rname(char *start,size_t offset,char **res);
+size_t parse_rr(char *start, size_t offset, size_t ncount,
+                struct dns_rr **res);
+size_t parse_rname(char *start, size_t offset, char **res);
 
 int parse_msg(struct dns_msg *m);
 void print_rr(struct dns_rr *rr);
-int bind_request(char *domain,uint16_t qtype,char **res);
+int bind_request(char *domain, uint16_t qtype, char **res);
 /*
 inline uint8_t get_rcode(uint16_t flags){
     uint8_t *u;
@@ -177,12 +178,10 @@ inline uint8_t get_ra(uint16_t flags){
 /* class values*/
 /* internet*/
 #define CLS_IN 1
-/*CSNET*/
+ /*CSNET*/
 #define CLS_CS 2
-/*CHAOS*/
+     /*CHAOS*/
 #define CLS_CH 3
 /*hesiod*/
 #define CLS_HS 4
-
-
 #endif
