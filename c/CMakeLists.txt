@@ -16,3 +16,6 @@ add_library(dnsutil dnsutil.c)
 target_link_libraries(dnsc dnsutil)
 add_executable(dnssrv dnssrv.c)
 target_link_libraries(dnssrv ${GLIB_LIBRARIES} ${GIO_LIBRARIES})
+
+add_executable(dnssrv_2 dnssrv_2.c)
+target_link_libraries(dnssrv_2 dnsutil ${GLIB_LIBRARIES} ${GIO_LIBRARIES})
