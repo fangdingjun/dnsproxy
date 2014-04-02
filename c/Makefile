@@ -128,6 +128,19 @@ dnssrv/fast:
 .PHONY : dnssrv/fast
 
 #=============================================================================
+# Target rules for targets named dnssrv_2
+
+# Build rule for target.
+dnssrv_2: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 dnssrv_2
+.PHONY : dnssrv_2
+
+# fast build rule for target.
+dnssrv_2/fast:
+	$(MAKE) -f CMakeFiles/dnssrv_2.dir/build.make CMakeFiles/dnssrv_2.dir/build
+.PHONY : dnssrv_2/fast
+
+#=============================================================================
 # Target rules for targets named dnsutil
 
 # Build rule for target.
@@ -188,6 +201,30 @@ dnssrv.c.s:
 	$(MAKE) -f CMakeFiles/dnssrv.dir/build.make CMakeFiles/dnssrv.dir/dnssrv.c.s
 .PHONY : dnssrv.c.s
 
+dnssrv_2.o: dnssrv_2.c.o
+.PHONY : dnssrv_2.o
+
+# target to build an object file
+dnssrv_2.c.o:
+	$(MAKE) -f CMakeFiles/dnssrv_2.dir/build.make CMakeFiles/dnssrv_2.dir/dnssrv_2.c.o
+.PHONY : dnssrv_2.c.o
+
+dnssrv_2.i: dnssrv_2.c.i
+.PHONY : dnssrv_2.i
+
+# target to preprocess a source file
+dnssrv_2.c.i:
+	$(MAKE) -f CMakeFiles/dnssrv_2.dir/build.make CMakeFiles/dnssrv_2.dir/dnssrv_2.c.i
+.PHONY : dnssrv_2.c.i
+
+dnssrv_2.s: dnssrv_2.c.s
+.PHONY : dnssrv_2.s
+
+# target to generate assembly for a file
+dnssrv_2.c.s:
+	$(MAKE) -f CMakeFiles/dnssrv_2.dir/build.make CMakeFiles/dnssrv_2.dir/dnssrv_2.c.s
+.PHONY : dnssrv_2.c.s
+
 dnsutil.o: dnsutil.c.o
 .PHONY : dnsutil.o
 
@@ -220,6 +257,7 @@ help:
 	@echo "... depend"
 	@echo "... dnsc"
 	@echo "... dnssrv"
+	@echo "... dnssrv_2"
 	@echo "... dnsutil"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
@@ -229,6 +267,9 @@ help:
 	@echo "... dnssrv.o"
 	@echo "... dnssrv.i"
 	@echo "... dnssrv.s"
+	@echo "... dnssrv_2.o"
+	@echo "... dnssrv_2.i"
+	@echo "... dnssrv_2.s"
 	@echo "... dnsutil.o"
 	@echo "... dnsutil.i"
 	@echo "... dnsutil.s"
