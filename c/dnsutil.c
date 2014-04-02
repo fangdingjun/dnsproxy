@@ -7,9 +7,9 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <sys/time.h>
-#include <sys/select.h>
-#include <getopt.h>
+//#include <sys/time.h>
+//#include <sys/select.h>
+//#include <getopt.h>
 #include "dns.h"
 
 void free_dns_msg(struct dns_msg *m)
