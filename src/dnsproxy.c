@@ -21,7 +21,7 @@ static gchar *servers[] = {
 };
 
 /* server GSocketAddress list */
-GList *srvlist=NULL;
+GList *srvlist = NULL;
 
 /*
  * gfw bad ip list from https://github.com/goagent/goagent/blob/3.0/local/proxy.ini
@@ -75,7 +75,7 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
 
         /* receive data */
         if ((nbytes = g_socket_receive_from(sock, &caddr, buf, 512, NULL, &error)) == -1) { // receive error
-            if (error->code == G_IO_ERROR_WOULD_BLOCK) { // no data
+            if (error->code == G_IO_ERROR_WOULD_BLOCK) {    // no data
                 break;
             }
             g_warning(error->message);
@@ -85,9 +85,11 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
         }
 
         g_debug("receive %d bytes from client %s:%d", nbytes,
-                g_inet_address_to_string (g_inet_socket_address_get_address ((GInetSocketAddress *) caddr)),
-                g_inet_socket_address_get_port((GInetSocketAddress *) caddr)
-                );
+                g_inet_address_to_string(g_inet_socket_address_get_address
+                                         ((GInetSocketAddress *) caddr)),
+                g_inet_socket_address_get_port((GInetSocketAddress *)
+                                               caddr)
+            );
 
         /* allocate memory */
         msg = g_new0(struct dnsmsginfo, 1);
@@ -157,7 +159,9 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     g_debug("process client msg");
 
     g_debug("create socket to server");
-    sock = g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, &error);
+    sock =
+        g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
+                     G_SOCKET_PROTOCOL_UDP, &error);
     if (sock == NULL) {         // create socket error
         g_warning(error->message);
         g_error_free(error);
@@ -194,10 +198,13 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     for (s = srvlist; s && s->next != srvlist; s = s->next) {
         gchar *ip;
         saddr = (GSocketAddress *) s->data;
-        ip = g_inet_address_to_string(g_inet_socket_address_get_address((GInetSocketAddress *) saddr));
+        ip = g_inet_address_to_string(g_inet_socket_address_get_address
+                                      ((GInetSocketAddress *) saddr));
 
         g_debug("send to %s:%d", ip, 53);
-        if ((g_socket_send_to (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL, &error) == -1)) {
+        if ((g_socket_send_to
+             (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
+              &error) == -1)) {
             // on error
             g_warning(error->message);
             g_error_free(error);
@@ -236,13 +243,15 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
         saddr = NULL;
         error = NULL;
 
-        if ((nbytes = g_socket_receive_from(sock, &saddr, buf, 512, NULL, &error)) == -1) {
+        if ((nbytes =
+             g_socket_receive_from(sock, &saddr, buf, 512, NULL,
+                                   &error)) == -1) {
 
             /* no data */
             if (error->code == G_IO_ERROR_WOULD_BLOCK) {
                 g_error_free(error);
                 error = NULL;
-                
+
                 /* black list ip found, to wait next data */
                 if (black_ip_found) {
                     return TRUE;
@@ -259,9 +268,11 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
         }
 
         g_debug("receive %d bytes from server %s:%d", nbytes,
-                g_inet_address_to_string (g_inet_socket_address_get_address ((GInetSocketAddress *) saddr)),
-                g_inet_socket_address_get_port((GInetSocketAddress *) saddr)
-                );
+                g_inet_address_to_string(g_inet_socket_address_get_address
+                                         ((GInetSocketAddress *) saddr)),
+                g_inet_socket_address_get_port((GInetSocketAddress *)
+                                               saddr)
+            );
 
         /* prepare for parsing dns message */
         struct dns_msg *m;
@@ -275,7 +286,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
         /* parse */
         parse_msg(m);
 
-        /* check blacklist ip*/
+        /* check blacklist ip */
         for (r = m->an; r != NULL; r = r->next) {
             if (r->type == RR_A) {
                 p1 = g_strstr_len(blacklist, -1, (gchar *) r->rdata);
@@ -335,10 +346,10 @@ static GOptionEntry entries[] = {
     {"local_ip", 'l', 0, G_OPTION_ARG_STRING, &local_ip,
      "local ip address to listen on", "IP"},
     /*{"server", 's', 0, G_OPTION_ARG_STRING, &server_ip,
-      "the upstream dns server to forward to",
-      "SERVER"}, 
-      */
-      {NULL}
+       "the upstream dns server to forward to",
+       "SERVER"}, 
+     */
+    {NULL}
 };
 
 int main(int argc, char *argv[])
@@ -373,7 +384,9 @@ int main(int argc, char *argv[])
 #endif                          /*  */
 
     g_debug("create listen socket");
-    sock = g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, &error);
+    sock =
+        g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
+                     G_SOCKET_PROTOCOL_UDP, &error);
     if (sock == NULL) {
 
         /* error */
@@ -387,7 +400,9 @@ int main(int argc, char *argv[])
     g_socket_set_blocking(sock, FALSE);
 
     /* create local address */
-    laddr = g_inet_socket_address_new(g_inet_address_new_from_string (local_ip), 53);
+    laddr =
+        g_inet_socket_address_new(g_inet_address_new_from_string(local_ip),
+                                  53);
 
     g_debug("bind to local");
     if (!g_socket_bind(sock, laddr, TRUE, &error)) {
@@ -408,7 +423,9 @@ int main(int argc, char *argv[])
         if (servers[i] == NULL) {
             break;
         }
-        srvaddr = g_inet_socket_address_new(g_inet_address_new_from_string (servers[i]), 53);
+        srvaddr =
+            g_inet_socket_address_new(g_inet_address_new_from_string
+                                      (servers[i]), 53);
         srvlist = g_list_append(srvlist, srvaddr);
     }
 
