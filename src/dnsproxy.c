@@ -78,7 +78,7 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
             if (error->code == G_IO_ERROR_WOULD_BLOCK) {    // no data
                 break;
             }
-            g_warning(error->message);
+            g_warning("%s", error->message);
             g_error_free(error);
             error = NULL;
             break;
@@ -163,7 +163,7 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
         g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
                      G_SOCKET_PROTOCOL_UDP, &error);
     if (sock == NULL) {         // create socket error
-        g_warning(error->message);
+        g_warning("%s", error->message);
         g_error_free(error);
         error = NULL;
         goto err1;
@@ -206,7 +206,7 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
              (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
               &error) == -1)) {
             // on error
-            g_warning(error->message);
+            g_warning("%s", error->message);
             g_error_free(error);
             error = NULL;
             goto err2;
@@ -261,11 +261,12 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
             }
 
             /* error */
-            g_warning(error->message);
+            g_warning("%s", error->message);
             g_error_free(error);
             error = NULL;
             break;
         }
+
 
         g_debug("receive %d bytes from server %s:%d", nbytes,
                 g_inet_address_to_string(g_inet_socket_address_get_address
@@ -273,6 +274,8 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
                 g_inet_socket_address_get_port((GInetSocketAddress *)
                                                saddr)
             );
+
+        g_object_unref(saddr);
 
         /* prepare for parsing dns message */
         struct dns_msg *m;
@@ -312,7 +315,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
              (msg->sock, msg->caddr, buf, nbytes, NULL, &error)) == -1) {
 
             /* error */
-            g_warning(error->message);
+            g_warning("%s", error->message);
             g_error_free(error);
             error = NULL;
             break;
@@ -330,12 +333,16 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     g_source_destroy(msg->timeout);
     g_source_unref(msg->timeout);
 
+    g_debug("free client address");
+    g_object_unref(msg->caddr);
+
     g_debug("free msg");
     g_free(msg);
 
     g_debug("close server socket");
     g_socket_close(sock, NULL);
     g_object_unref(sock);
+
 
     /* return FALSE will remove the source from main loop */
     return FALSE;
@@ -390,7 +397,7 @@ int main(int argc, char *argv[])
     if (sock == NULL) {
 
         /* error */
-        g_warning(error->message);
+        g_warning("%s", error->message);
         g_error_free(error);
         error = NULL;
         goto err1;
@@ -408,7 +415,7 @@ int main(int argc, char *argv[])
     if (!g_socket_bind(sock, laddr, TRUE, &error)) {
 
         /* bind error */
-        g_warning(error->message);
+        g_warning("%s", error->message);
         g_error_free(error);
         error = NULL;
         goto err2;
