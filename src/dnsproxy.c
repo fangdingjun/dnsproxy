@@ -6,9 +6,12 @@
 #endif                          /*  win32 */
 
 #include "dns.h"
-static gchar *local_ip = "0.0.0.0";
-static gchar *server_ip = "8.8.8.8";
 
+static gchar *local_ip = "0.0.0.0";
+
+//static gchar *server_ip = "8.8.8.8";
+
+/* the remote dns server to forward to */
 static gchar *servers[] = {
     "8.8.8.8",
     "223.6.6.6",
@@ -17,29 +20,45 @@ static gchar *servers[] = {
     NULL
 };
 
-GList *srvlist;
+/* server GSocketAddress list */
+GList *srvlist=NULL;
 
+/*
+ * gfw bad ip list from https://github.com/goagent/goagent/blob/3.0/local/proxy.ini
+ * 
+ */
 gchar *blacklist =
     "1.1.1.1|255.255.255.255|74.125.127.102|74.125.155.102|74.125.39.102|74.125.39.113|209.85.229.138|4.36.66.178|8.7.198.45|37.61.54.158|46.82.174.68|59.24.3.173|64.33.88.161|64.33.99.47|64.66.163.251|65.104.202.252|65.160.219.113|66.45.252.237|72.14.205.104|72.14.205.99|78.16.49.15|93.46.8.89|128.121.126.139|159.106.121.75|169.132.13.103|192.67.198.6|202.106.1.2|202.181.7.85|203.161.230.171|203.98.7.65|207.12.88.98|208.56.31.43|209.145.54.50|209.220.30.174|209.36.73.33|209.85.229.138|211.94.66.147|213.169.251.35|216.221.188.182|216.234.179.13|243.185.187.3|243.185.187.39";
+
+/* this struct will pass to event callback */
 struct dnsmsginfo {
     GSocket *sock;              /* listen socket */
     GSocketAddress *caddr;      /* client address */
     GString *cmsg;              /* dns msg from client */
     GSource *timeout;           /* timeout source */
     GSource *srv;               /* server source */
-    GSocket *sock_srv;
+    GSocket *sock_srv;          /* server socket */
 };
 
 // function define
+/* server response callback */
 gboolean read_from_server(GSocket * sock, GIOCondition cond,
                           gpointer data);
+
+/* client request callback */
 gboolean read_from_client(GSocket * sock, GIOCondition cond,
                           gpointer user_data);
+
+/* send data to server */
 gboolean process_client_msg(struct dnsmsginfo *msg);
+
+/* server response timeout callback */
 gboolean timeout_server(gpointer data);
 
-/* the callback function for client data in
- * */
+/* 
+ * the callback function for client request
+ * 
+ */
 gboolean read_from_client(GSocket * sock, GIOCondition cond,
                           gpointer user_data)
 {
@@ -49,13 +68,14 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
     GSource *timeout;
     gssize nbytes;
     gchar buf[512];
+
     while (1) {
         caddr = NULL;
         error = NULL;
 
         /* receive data */
         if ((nbytes = g_socket_receive_from(sock, &caddr, buf, 512, NULL, &error)) == -1) { // receive error
-            if (error->code == G_IO_ERROR_WOULD_BLOCK) {
+            if (error->code == G_IO_ERROR_WOULD_BLOCK) { // no data
                 break;
             }
             g_warning(error->message);
@@ -63,45 +83,59 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
             error = NULL;
             break;
         }
+
         g_debug("receive %d bytes from client %s:%d", nbytes,
-                g_inet_address_to_string
-                (g_inet_socket_address_get_address
-                 ((GInetSocketAddress *) caddr)),
-                g_inet_socket_address_get_port((GInetSocketAddress *)
-                                               caddr));
+                g_inet_address_to_string (g_inet_socket_address_get_address ((GInetSocketAddress *) caddr)),
+                g_inet_socket_address_get_port((GInetSocketAddress *) caddr)
+                );
 
         /* allocate memory */
         msg = g_new0(struct dnsmsginfo, 1);
+
         msg->sock = sock;
         msg->caddr = caddr;
         msg->cmsg = g_string_new_len(buf, nbytes);
-        timeout = g_timeout_source_new_seconds(8);
+
+        /* create server response timeout event source */
+        timeout = g_timeout_source_new_seconds(5);
         g_source_set_callback(timeout, timeout_server, msg, NULL);
         g_source_attach(timeout, g_main_context_default());
+
+        /* save */
         msg->timeout = timeout;
 
         /* process msg */
         process_client_msg(msg);
-    } return TRUE;
+    }
+
+    /* must return TRUE to keep event source */
+    return TRUE;
 }
 
 
-/* callback from timeout from server */
+/* callback from timeout for server response timeout */
 gboolean timeout_server(gpointer data)
 {
     struct dnsmsginfo *msg;
+
     msg = (struct dnsmsginfo *) data;
+
     g_warning("timeout, free memory");
     g_source_destroy(msg->srv);
+
     g_debug("free cmsg");
     g_string_free(msg->cmsg, TRUE);
+
     g_debug("unref msg->srv");
     g_source_unref(msg->srv);
+
     g_debug("close server socket");
     g_socket_close(msg->sock_srv, NULL);
     g_object_unref(msg->sock_srv);
+
     g_debug("destroy timeout source");
     g_source_destroy(msg->timeout);
+
     g_debug("unref timeout source");
     g_source_unref(msg->timeout);
 
@@ -115,29 +149,35 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
 {
     GSocket *sock;              /* server socket */
     GError *error = NULL;
-    GSource *esrc;
+    GSource *esrc;              /* server response event source */
     GSocketAddress *saddr;      /* server address */
 
     GList *s;
+
     g_debug("process client msg");
+
     g_debug("create socket to server");
-    sock =
-        g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
-                     G_SOCKET_PROTOCOL_UDP, &error);
+    sock = g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, &error);
     if (sock == NULL) {         // create socket error
         g_warning(error->message);
         g_error_free(error);
         error = NULL;
         goto err1;
     }
+
     msg->sock_srv = sock;
+
     g_debug("set server socket nonblock");
     g_socket_set_blocking(sock, FALSE);
+
     g_debug("create event source for server socket");
     esrc = g_socket_create_source(sock, G_IO_IN, NULL);
+
     g_debug("set callback function");
     g_source_set_callback(esrc, read_from_server, msg, NULL);
+
     msg->srv = esrc;
+
     g_debug("attach event to default context");
     g_source_attach(esrc, g_main_context_default());
 
@@ -147,34 +187,38 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
        g_inet_socket_address_new(g_inet_address_new_from_string
        (server_ip), 53);
      */
+
     g_debug("send msg to server");
+
+    /* send the data to all servers */
     for (s = srvlist; s && s->next != srvlist; s = s->next) {
         gchar *ip;
         saddr = (GSocketAddress *) s->data;
-        ip = g_inet_address_to_string(g_inet_socket_address_get_address
-                                      ((GInetSocketAddress *) saddr));
-        g_debug("send to %s:%d", ip, 53);
-        if ((g_socket_send_to
-             (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
-              &error) == -1)) {
+        ip = g_inet_address_to_string(g_inet_socket_address_get_address((GInetSocketAddress *) saddr));
 
+        g_debug("send to %s:%d", ip, 53);
+        if ((g_socket_send_to (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL, &error) == -1)) {
             // on error
             g_warning(error->message);
             g_error_free(error);
             error = NULL;
             goto err2;
         }
+
         g_debug("send msg to server %s:%d success", ip, 53);
     }
+
     return TRUE;
+
   err2:
+    /* destroy the socket */
     g_object_unref(sock);
   err1:
     return FALSE;
 }
 
 
-/* the callback function for server data in */
+/* the callback function for server response */
 gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
 {
     struct dnsmsginfo *msg;
@@ -182,37 +226,44 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     gchar buf[512];
     GError *error = NULL;
     gssize nbytes;
-    GSource *csrc;              // source
+    //GSource *csrc;              // event source for server
     gint black_ip_found = 0;
+
     msg = (struct dnsmsginfo *) data;   /* passed from callback */
+
     g_debug("receive from server");
     while (1) {
         saddr = NULL;
         error = NULL;
-        if ((nbytes =
-             g_socket_receive_from(sock, &saddr, buf, 512, NULL,
-                                   &error)) == -1) {
 
-            /* error */
+        if ((nbytes = g_socket_receive_from(sock, &saddr, buf, 512, NULL, &error)) == -1) {
+
+            /* no data */
             if (error->code == G_IO_ERROR_WOULD_BLOCK) {
                 g_error_free(error);
                 error = NULL;
+                
+                /* black list ip found, to wait next data */
                 if (black_ip_found) {
                     return TRUE;
                 }
+
                 break;
             }
+
+            /* error */
             g_warning(error->message);
             g_error_free(error);
             error = NULL;
             break;
         }
+
         g_debug("receive %d bytes from server %s:%d", nbytes,
-                g_inet_address_to_string
-                (g_inet_socket_address_get_address
-                 ((GInetSocketAddress *) saddr)),
-                g_inet_socket_address_get_port((GInetSocketAddress *)
-                                               saddr));
+                g_inet_address_to_string (g_inet_socket_address_get_address ((GInetSocketAddress *) saddr)),
+                g_inet_socket_address_get_port((GInetSocketAddress *) saddr)
+                );
+
+        /* prepare for parsing dns message */
         struct dns_msg *m;
         m = g_new0(struct dns_msg, 1);
         m->msg_len = nbytes;
@@ -220,7 +271,11 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
         memcpy(m->buf, buf, nbytes);
         struct dns_rr *r;
         gchar *p1;
+
+        /* parse */
         parse_msg(m);
+
+        /* check blacklist ip*/
         for (r = m->an; r != NULL; r = r->next) {
             if (r->type == RR_A) {
                 p1 = g_strstr_len(blacklist, -1, (gchar *) r->rdata);
@@ -231,13 +286,16 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
                 }
             }
         }
+
+        /* free */
         free_dns_msg(m);
 
-        //free(m);
+        /* found */
         if (black_ip_found) {
             g_warning("badip found, continue");
             continue;
         }
+
         g_debug("send to client");
         if ((g_socket_send_to
              (msg->sock, msg->caddr, buf, nbytes, NULL, &error)) == -1) {
@@ -249,20 +307,21 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
             break;
         }
     }
-    g_debug("get current source");
-    csrc = g_main_current_source();
-    if (csrc) {
-        g_debug("destroy source");
-        g_source_destroy(csrc);
-        g_debug("unref source");
-        g_source_unref(csrc);
-    }
+
+    g_debug("destroy srv evt source");
+    g_source_destroy(msg->srv);
+    g_source_unref(msg->srv);
+
     g_debug("free cmsg");
     g_string_free(msg->cmsg, TRUE);
+
+    g_debug("remove timeout event");
     g_source_destroy(msg->timeout);
     g_source_unref(msg->timeout);
+
     g_debug("free msg");
     g_free(msg);
+
     g_debug("close server socket");
     g_socket_close(sock, NULL);
     g_object_unref(sock);
@@ -271,13 +330,15 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     return FALSE;
 }
 
+/* command line options */
 static GOptionEntry entries[] = {
     {"local_ip", 'l', 0, G_OPTION_ARG_STRING, &local_ip,
-     "local ip address to listen on", "IP"}, {"server", 's', 0,
-                                              G_OPTION_ARG_STRING,
-                                              &server_ip,
-                                              "the upstream dns server to forward to",
-                                              "SERVER"}, {NULL}
+     "local ip address to listen on", "IP"},
+    /*{"server", 's', 0, G_OPTION_ARG_STRING, &server_ip,
+      "the upstream dns server to forward to",
+      "SERVER"}, 
+      */
+      {NULL}
 };
 
 int main(int argc, char *argv[])
@@ -301,6 +362,7 @@ int main(int argc, char *argv[])
         error = NULL;
         goto err1;
     }
+
     g_message("beginning...");
 
     /* initial */
@@ -308,12 +370,10 @@ int main(int argc, char *argv[])
 
 #ifdef G_OS_WIN32
     g_networking_init();
-
 #endif                          /*  */
+
     g_debug("create listen socket");
-    sock =
-        g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM,
-                     G_SOCKET_PROTOCOL_UDP, &error);
+    sock = g_socket_new(G_SOCKET_FAMILY_IPV4, G_SOCKET_TYPE_DATAGRAM, G_SOCKET_PROTOCOL_UDP, &error);
     if (sock == NULL) {
 
         /* error */
@@ -322,13 +382,13 @@ int main(int argc, char *argv[])
         error = NULL;
         goto err1;
     }
+
     g_debug("set listen socket nonblock");
     g_socket_set_blocking(sock, FALSE);
 
     /* create local address */
-    laddr =
-        g_inet_socket_address_new(g_inet_address_new_from_string
-                                  (local_ip), 53);
+    laddr = g_inet_socket_address_new(g_inet_address_new_from_string (local_ip), 53);
+
     g_debug("bind to local");
     if (!g_socket_bind(sock, laddr, TRUE, &error)) {
 
@@ -338,6 +398,7 @@ int main(int argc, char *argv[])
         error = NULL;
         goto err2;
     }
+
     g_message("listen to %s:%d", local_ip, 53);
     //g_message("forward to server %s:%d", server_ip, 53);
 
@@ -347,16 +408,16 @@ int main(int argc, char *argv[])
         if (servers[i] == NULL) {
             break;
         }
-        srvaddr =
-            g_inet_socket_address_new(g_inet_address_new_from_string
-                                      (servers[i]), 53);
+        srvaddr = g_inet_socket_address_new(g_inet_address_new_from_string (servers[i]), 53);
         srvlist = g_list_append(srvlist, srvaddr);
     }
 
     g_debug("create event source from listen socket");
     esrc = g_socket_create_source(sock, G_IO_IN, NULL);
     g_source_set_callback(esrc, read_from_client, NULL, NULL);
+
     g_source_attach(esrc, g_main_context_default());
+
     g_debug("creat main loop");
     mloop = g_main_loop_new(NULL, FALSE);
 
