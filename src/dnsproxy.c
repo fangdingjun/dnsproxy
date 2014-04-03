@@ -8,6 +8,17 @@
 #include "dns.h"
 static gchar *local_ip = "0.0.0.0";
 static gchar *server_ip = "8.8.8.8";
+
+static gchar *servers[] = {
+    "8.8.8.8",
+    "223.6.6.6",
+    "114.114.114.114",
+    "4.2.2.2",
+    NULL
+};
+
+GList *srvlist;
+
 gchar *blacklist =
     "1.1.1.1|255.255.255.255|74.125.127.102|74.125.155.102|74.125.39.102|74.125.39.113|209.85.229.138|4.36.66.178|8.7.198.45|37.61.54.158|46.82.174.68|59.24.3.173|64.33.88.161|64.33.99.47|64.66.163.251|65.104.202.252|65.160.219.113|66.45.252.237|72.14.205.104|72.14.205.99|78.16.49.15|93.46.8.89|128.121.126.139|159.106.121.75|169.132.13.103|192.67.198.6|202.106.1.2|202.181.7.85|203.161.230.171|203.98.7.65|207.12.88.98|208.56.31.43|209.145.54.50|209.220.30.174|209.36.73.33|209.85.229.138|211.94.66.147|213.169.251.35|216.221.188.182|216.234.179.13|243.185.187.3|243.185.187.39";
 struct dnsmsginfo {
@@ -106,6 +117,8 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     GError *error = NULL;
     GSource *esrc;
     GSocketAddress *saddr;      /* server address */
+
+    GList *s;
     g_debug("process client msg");
     g_debug("create socket to server");
     sock =
@@ -129,21 +142,30 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     g_source_attach(esrc, g_main_context_default());
 
     /* create server socket address */
-    saddr =
-        g_inet_socket_address_new(g_inet_address_new_from_string
-                                  (server_ip), 53);
+    /*
+       saddr =
+       g_inet_socket_address_new(g_inet_address_new_from_string
+       (server_ip), 53);
+     */
     g_debug("send msg to server");
-    if ((g_socket_send_to
-         (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
-          &error) == -1)) {
+    for (s = srvlist; s && s->next != srvlist; s = s->next) {
+        gchar *ip;
+        saddr = (GSocketAddress *) s->data;
+        ip = g_inet_address_to_string(g_inet_socket_address_get_address
+                                      ((GInetSocketAddress *) saddr));
+        g_debug("send to %s:%d", ip, 53);
+        if ((g_socket_send_to
+             (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
+              &error) == -1)) {
 
-        // on error
-        g_warning(error->message);
-        g_error_free(error);
-        error = NULL;
-        goto err2;
+            // on error
+            g_warning(error->message);
+            g_error_free(error);
+            error = NULL;
+            goto err2;
+        }
+        g_debug("send msg to server %s:%d success", ip, 53);
     }
-    g_debug("send msg to server success");
     return TRUE;
   err2:
     g_object_unref(sock);
@@ -267,7 +289,8 @@ int main(int argc, char *argv[])
     GError *error = NULL;
     GOptionContext *context;
 
-    //gint i;
+    gint i;
+
     context = g_option_context_new("- dns proxy server");
     g_option_context_add_main_entries(context, entries, NULL);
 
@@ -316,7 +339,20 @@ int main(int argc, char *argv[])
         goto err2;
     }
     g_message("listen to %s:%d", local_ip, 53);
-    g_message("forward to server %s:%d", server_ip, 53);
+    //g_message("forward to server %s:%d", server_ip, 53);
+
+    g_debug("create server socket address");
+    for (i = 0;; i++) {
+        GSocketAddress *srvaddr;
+        if (servers[i] == NULL) {
+            break;
+        }
+        srvaddr =
+            g_inet_socket_address_new(g_inet_address_new_from_string
+                                      (servers[i]), 53);
+        srvlist = g_list_append(srvlist, srvaddr);
+    }
+
     g_debug("create event source from listen socket");
     esrc = g_socket_create_source(sock, G_IO_IN, NULL);
     g_source_set_callback(esrc, read_from_client, NULL, NULL);
