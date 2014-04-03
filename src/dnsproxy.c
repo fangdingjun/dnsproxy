@@ -25,7 +25,7 @@ GList *srvlist = NULL;
 
 /*
  * gfw bad ip list from https://github.com/goagent/goagent/blob/3.0/local/proxy.ini
- * 
+ *
  */
 gchar *blacklist =
     "1.1.1.1|255.255.255.255|74.125.127.102|74.125.155.102|74.125.39.102|74.125.39.113|209.85.229.138|4.36.66.178|8.7.198.45|37.61.54.158|46.82.174.68|59.24.3.173|64.33.88.161|64.33.99.47|64.66.163.251|65.104.202.252|65.160.219.113|66.45.252.237|72.14.205.104|72.14.205.99|78.16.49.15|93.46.8.89|128.121.126.139|159.106.121.75|169.132.13.103|192.67.198.6|202.106.1.2|202.181.7.85|203.161.230.171|203.98.7.65|207.12.88.98|208.56.31.43|209.145.54.50|209.220.30.174|209.36.73.33|209.85.229.138|211.94.66.147|213.169.251.35|216.221.188.182|216.234.179.13|243.185.187.3|243.185.187.39";
@@ -55,9 +55,9 @@ gboolean process_client_msg(struct dnsmsginfo *msg);
 /* server response timeout callback */
 gboolean timeout_server(gpointer data);
 
-/* 
+/*
  * the callback function for client request
- * 
+ *
  */
 gboolean read_from_client(GSocket * sock, GIOCondition cond,
                           gpointer user_data)
@@ -75,6 +75,11 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
 
         /* receive data */
         if ((nbytes = g_socket_receive_from(sock, &caddr, buf, 512, NULL, &error)) == -1) { // receive error
+
+            if(caddr){
+                g_object_unref(caddr);
+            }
+
             if (error->code == G_IO_ERROR_WOULD_BLOCK) {    // no data
                 break;
             }
@@ -123,13 +128,15 @@ gboolean timeout_server(gpointer data)
     msg = (struct dnsmsginfo *) data;
 
     g_warning("timeout, free memory");
+
+    /* destroy server response event source */
     g_source_destroy(msg->srv);
-
-    g_debug("free cmsg");
-    g_string_free(msg->cmsg, TRUE);
-
     g_debug("unref msg->srv");
     g_source_unref(msg->srv);
+
+    /* free client request message */
+    g_debug("free cmsg");
+    g_string_free(msg->cmsg, TRUE);
 
     g_debug("close server socket");
     g_socket_close(msg->sock_srv, NULL);
@@ -137,9 +144,14 @@ gboolean timeout_server(gpointer data)
 
     g_debug("destroy timeout source");
     g_source_destroy(msg->timeout);
-
     g_debug("unref timeout source");
     g_source_unref(msg->timeout);
+
+    g_debug("unref client address");
+    g_object_unref(msg->caddr);
+
+    /* free itself */
+    g_free(msg);
 
     /* return FALSE will remove this source */
     return FALSE;
@@ -247,6 +259,10 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
              g_socket_receive_from(sock, &saddr, buf, 512, NULL,
                                    &error)) == -1) {
 
+            if (saddr){
+                g_object_unref(saddr);
+            }
+
             /* no data */
             if (error->code == G_IO_ERROR_WOULD_BLOCK) {
                 g_error_free(error);
@@ -326,7 +342,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     g_source_destroy(msg->srv);
     g_source_unref(msg->srv);
 
-    g_debug("free cmsg");
+    g_debug("free client request message");
     g_string_free(msg->cmsg, TRUE);
 
     g_debug("remove timeout event");
@@ -336,13 +352,12 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     g_debug("free client address");
     g_object_unref(msg->caddr);
 
-    g_debug("free msg");
-    g_free(msg);
-
     g_debug("close server socket");
-    g_socket_close(sock, NULL);
-    g_object_unref(sock);
+    g_socket_close(msg->sock_srv, NULL);
+    g_object_unref(msg->sock_srv);
 
+    g_debug("free struct dnsmsginfo");
+    g_free(msg);
 
     /* return FALSE will remove the source from main loop */
     return FALSE;
@@ -354,7 +369,7 @@ static GOptionEntry entries[] = {
      "local ip address to listen on", "IP"},
     /*{"server", 's', 0, G_OPTION_ARG_STRING, &server_ip,
        "the upstream dns server to forward to",
-       "SERVER"}, 
+       "SERVER"},
      */
     {NULL}
 };
@@ -455,6 +470,7 @@ int main(int argc, char *argv[])
     g_object_unref(sock);
     g_warning("end");
     return 0;
+
   err2:
     g_object_unref(sock);
   err1:
