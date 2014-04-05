@@ -68,6 +68,7 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
     GSource *timeout;
     gssize nbytes;
     gchar buf[512];
+    gchar *addr;
 
     while (1) {
         caddr = NULL;
@@ -88,13 +89,17 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
             error = NULL;
             break;
         }
+        GInetAddress *cinet;
+        cinet= g_inet_socket_address_get_address ((GInetSocketAddress *) caddr);
+        addr= g_inet_address_to_string(cinet);
 
         g_debug("receive %d bytes from client %s:%d", nbytes,
-                g_inet_address_to_string(g_inet_socket_address_get_address
-                                         ((GInetSocketAddress *) caddr)),
+                addr,
                 g_inet_socket_address_get_port((GInetSocketAddress *)
                                                caddr)
             );
+        //g_object_unref(cinet);
+        g_free(addr);
 
         /* allocate memory */
         msg = g_new0(struct dnsmsginfo, 1);
@@ -205,15 +210,17 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
      */
 
     g_debug("send msg to server");
+    GInetAddress *sinet;
 
     /* send the data to all servers */
     for (s = srvlist; s && s->next != srvlist; s = s->next) {
         gchar *ip;
         saddr = (GSocketAddress *) s->data;
-        ip = g_inet_address_to_string(g_inet_socket_address_get_address
-                                      ((GInetSocketAddress *) saddr));
+        sinet=g_inet_socket_address_get_address((GInetSocketAddress*)saddr);
+        ip = g_inet_address_to_string(sinet);
 
         g_debug("send to %s:%d", ip, 53);
+
         if ((g_socket_send_to
              (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
               &error) == -1)) {
@@ -225,6 +232,8 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
         }
 
         g_debug("send msg to server %s:%d success", ip, 53);
+        //g_object_unref(sinet);
+        g_free(ip);
     }
 
     return TRUE;
@@ -247,6 +256,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     gssize nbytes;
     //GSource *csrc;              // event source for server
     gint black_ip_found = 0;
+    gchar *addr;
 
     msg = (struct dnsmsginfo *) data;   /* passed from callback */
 
@@ -282,14 +292,17 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
             error = NULL;
             break;
         }
-
+        GInetAddress *sinet;
+        sinet= g_inet_socket_address_get_address ((GInetSocketAddress *) saddr);
+        addr = g_inet_address_to_string(sinet);
 
         g_debug("receive %d bytes from server %s:%d", nbytes,
-                g_inet_address_to_string(g_inet_socket_address_get_address
-                                         ((GInetSocketAddress *) saddr)),
+                addr,
                 g_inet_socket_address_get_port((GInetSocketAddress *)
                                                saddr)
             );
+        //g_object_unref(sinet);
+        g_free(addr);
 
         g_object_unref(saddr);
 
