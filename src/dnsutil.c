@@ -284,20 +284,21 @@ void free_rr(struct dns_rr *rr)
     struct dns_rr *tmp, *tmp1;
     if (rr == NULL)
         return;
-    for (tmp = rr; tmp; tmp = tmp->next) {
-        tmp1 = tmp;
-        if (tmp1->name)
-            free(tmp1->name);
-        if (tmp1->rdata) {
-            if (tmp1->type == RR_MX) {
+    for (tmp = rr; tmp; ) {
+        tmp1 = tmp->next;
+        if (tmp->name)
+            free(tmp->name);
+        if (tmp->rdata) {
+            if (tmp->type == RR_MX) {
                 char *t;
-                t = ((struct mx_rdata *) tmp1->rdata)->domain;
+                t = ((struct mx_rdata *) tmp->rdata)->domain;
                 if (t)
                     free(t);
             }
-            free(tmp1->rdata);
+            free(tmp->rdata);
         }
-        free(tmp1);
+        free(tmp);
+        tmp=tmp1;
     }
 }
 

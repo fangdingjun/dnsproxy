@@ -320,10 +320,12 @@ gboolean read_from_client(gpointer data)
         struct thread_arg *d = g_new0(struct thread_arg, 1);
         d->req = r;
         d->addr = addr;
+        /*
         if (!g_thread_pool_push(pool, d, &error)) {
             g_print("%s\n", error->message);
             break;
-        }
+        }*/
+        g_thread_pool_push(pool, d, &error);
     }
     return ret;
 
