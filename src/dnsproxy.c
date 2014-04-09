@@ -32,11 +32,11 @@ gchar *blacklist =
 
 /* this struct will pass to event callback */
 struct dnsmsginfo {
-    GSocket *sock;              /* listen socket */
-    GSocketAddress *caddr;      /* client address */
-    GString *cmsg;              /* dns msg from client */
-    GSource *timeout;           /* timeout source */
-    GSource *srv;               /* server source */
+    GSocket *sock_listen;              /* listen socket */
+    GSocketAddress *client_addr;      /* client address */
+    GString *client_msg;              /* dns msg from client */
+    GSource *timeout_source;           /* timeout source */
+    GSource *srv_source;               /* server source */
     GSocket *sock_srv;          /* server socket */
 };
 
@@ -77,7 +77,7 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
         /* receive data */
         if ((nbytes = g_socket_receive_from(sock, &caddr, buf, 512, NULL, &error)) == -1) { // receive error
 
-            if(caddr){
+            if (caddr) {
                 g_object_unref(caddr);
             }
 
@@ -92,13 +92,13 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
             break;
         }
         GInetAddress *cinet;
-        cinet = g_inet_socket_address_get_address ((GInetSocketAddress *) caddr);
+        cinet = g_inet_socket_address_get_address((GInetSocketAddress *)
+                                                  caddr);
         addr = g_inet_address_to_string(cinet);
 
         g_debug("receive %d bytes from client %s:%d", nbytes,
-                addr,
-                g_inet_socket_address_get_port((GInetSocketAddress *)
-                                               caddr)
+                addr, g_inet_socket_address_get_port((GInetSocketAddress *)
+                                                     caddr)
             );
         //g_object_unref(cinet);
         g_free(addr);
@@ -106,17 +106,17 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
         /* allocate memory */
         msg = g_new0(struct dnsmsginfo, 1);
 
-        msg->sock = sock;
-        msg->caddr = caddr;
-        msg->cmsg = g_string_new_len(buf, nbytes);
+        msg->sock_listen = sock;
+        msg->client_addr = caddr;
+        msg->client_msg = g_string_new_len(buf, nbytes);
 
         /* create server response timeout event source */
-        timeout = g_timeout_source_new_seconds(3);
+        timeout = g_timeout_source_new_seconds(5);
         g_source_set_callback(timeout, timeout_server, msg, NULL);
         g_source_attach(timeout, NULL);
 
         /* save */
-        msg->timeout = timeout;
+        msg->timeout_source = timeout;
 
         g_source_unref(timeout);
 
@@ -136,30 +136,32 @@ gboolean timeout_server(gpointer data)
 
     msg = (struct dnsmsginfo *) data;
 
-    g_debug("timeout, free memory");
+    g_debug("timeout callback, free memory");
 
     /* destroy server response event source */
-    g_source_destroy(msg->srv);
+    g_debug("destroy srv source");
+    g_source_destroy(msg->srv_source);
     //g_debug("unref msg->srv");
     //g_source_unref(msg->srv);
 
     /* free client request message */
-    g_debug("free cmsg");
-    g_string_free(msg->cmsg, TRUE);
+    g_debug("free client message");
+    g_string_free(msg->client_msg, TRUE);
 
-    g_debug("close server socket");
-    g_object_unref(msg->sock_srv);
+    //g_debug("close server socket");
+    //g_object_unref(msg->sock_srv);
     //g_socket_close(msg->sock_srv, NULL);
 
-    g_debug("destroy timeout source");
-    g_source_destroy(msg->timeout);
+    //g_debug("destroy timeout source");
+    //g_source_destroy(msg->timeout);
     //g_debug("unref timeout source");
     //g_source_unref(msg->timeout);
 
     g_debug("unref client address");
-    g_object_unref(msg->caddr);
+    g_object_unref(msg->client_addr);
 
     /* free itself */
+    g_debug("free dnsmsginfo struct");
     g_free(msg);
 
     /* return FALSE will remove this source */
@@ -201,12 +203,13 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     g_debug("set callback function");
     g_source_set_callback(esrc, read_from_server, msg, NULL);
 
-    msg->srv = esrc;
+    msg->srv_source = esrc;
 
     g_debug("attach event to default context");
     g_source_attach(esrc, NULL);
 
     g_source_unref(esrc);
+    g_object_unref(sock);
 
     /* create server socket address */
     /*
@@ -222,13 +225,14 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     for (s = srvlist; s && s->next != srvlist; s = s->next) {
         gchar *ip;
         saddr = (GSocketAddress *) s->data;
-        sinet=g_inet_socket_address_get_address((GInetSocketAddress*)saddr);
+        sinet = g_inet_socket_address_get_address((GInetSocketAddress *)
+                                                  saddr);
         ip = g_inet_address_to_string(sinet);
 
         g_debug("send to %s:%d", ip, 53);
 
         if ((g_socket_send_to
-             (sock, saddr, msg->cmsg->str, msg->cmsg->len, NULL,
+             (sock, saddr, msg->client_msg->str, msg->client_msg->len, NULL,
               &error) == -1)) {
             // on error
             g_warning("%s", error->message);
@@ -275,7 +279,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
              g_socket_receive_from(sock, &saddr, buf, 512, NULL,
                                    &error)) == -1) {
 
-            if (saddr){
+            if (saddr) {
                 g_object_unref(saddr);
             }
 
@@ -299,13 +303,13 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
             break;
         }
         GInetAddress *sinet;
-        sinet= g_inet_socket_address_get_address ((GInetSocketAddress *) saddr);
+        sinet = g_inet_socket_address_get_address((GInetSocketAddress *)
+                                                  saddr);
         addr = g_inet_address_to_string(sinet);
 
         g_debug("receive %d bytes from server %s:%d", nbytes,
-                addr,
-                g_inet_socket_address_get_port((GInetSocketAddress *)
-                                               saddr)
+                addr, g_inet_socket_address_get_port((GInetSocketAddress *)
+                                                     saddr)
             );
         //g_object_unref(sinet);
         g_free(addr);
@@ -316,7 +320,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
         struct dns_msg *m;
         m = g_new0(struct dns_msg, 1);
         m->msg_len = nbytes;
-        m->buf = g_malloc(nbytes);
+        m->buf = g_malloc0(nbytes);
         memcpy(m->buf, buf, nbytes);
         struct dns_rr *r;
         gchar *p1;
@@ -347,7 +351,7 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
 
         g_debug("send to client");
         if ((g_socket_send_to
-             (msg->sock, msg->caddr, buf, nbytes, NULL, &error)) == -1) {
+             (msg->sock_listen, msg->client_addr, buf, nbytes, NULL, &error)) == -1) {
 
             /* error */
             g_warning("%s", error->message);
@@ -358,27 +362,27 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
     }
 
     /*
-    g_debug("destroy srv evt source");
-    g_source_destroy(msg->srv);
-    g_source_unref(msg->srv);
+       g_debug("destroy srv evt source");
+       g_source_destroy(msg->srv);
+       g_source_unref(msg->srv);
 
-    g_debug("free client request message");
-    g_string_free(msg->cmsg, TRUE);
+       g_debug("free client request message");
+       g_string_free(msg->cmsg, TRUE);
 
-    g_debug("remove timeout event");
-    g_source_destroy(msg->timeout);
-    g_source_unref(msg->timeout);
+       g_debug("remove timeout event");
+       g_source_destroy(msg->timeout);
+       g_source_unref(msg->timeout);
 
-    g_debug("free client address");
-    g_object_unref(msg->caddr);
+       g_debug("free client address");
+       g_object_unref(msg->caddr);
 
-    g_debug("close server socket");
-    g_object_unref(msg->sock_srv);
-    //g_socket_close(msg->sock_srv, NULL);
+       g_debug("close server socket");
+       g_object_unref(msg->sock_srv);
+       //g_socket_close(msg->sock_srv, NULL);
 
-    g_debug("free struct dnsmsginfo");
-    g_free(msg);
-    */
+       g_debug("free struct dnsmsginfo");
+       g_free(msg);
+     */
 
     /* return FALSE will remove the source from main loop */
     return TRUE;
@@ -479,8 +483,9 @@ int main(int argc, char *argv[])
     g_source_attach(esrc, NULL);
 
     g_source_unref(esrc);
+    g_object_unref(sock);
 
-    g_debug("creat main loop");
+    g_debug("create main loop");
     mloop = g_main_loop_new(NULL, FALSE);
 
     /* this will run forever */
@@ -489,8 +494,8 @@ int main(int argc, char *argv[])
 
     /* clean */
     g_main_loop_unref(mloop);
-    g_source_unref(esrc);
-    g_object_unref(sock);
+    //g_source_unref(esrc);
+    //g_object_unref(sock);
     g_warning("end");
     return 0;
 
