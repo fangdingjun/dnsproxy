@@ -72,7 +72,7 @@ size_t set_qname(char *p, char *name)
  * argv 3: the length to return
  * return the domain name string
  */
-size_t parse_rname(char *start, size_t offset, char **res)
+size_t parse_rname(char *start, size_t offset, size_t max, char **res)
 {
     uint8_t nn;
     char *p1;
@@ -87,12 +87,16 @@ size_t parse_rname(char *start, size_t offset, char **res)
         l = 0;
         return l;
     }
+    if (offset > max) {
+        return 0;
+    }
+
     p1 = start + offset;
     nn = *p1;
     while (nn) {
         //printf("nn=%02x\n",nn);
         /* this is a pointer */
-        if (nn & (0x3 << 6)) {
+        while (nn & (0x3 << 6)) {
             //printf("found 0xc0\n");
             /*get the offset */
             poffset = *((uint16_t *) p1);
@@ -106,12 +110,18 @@ size_t parse_rname(char *start, size_t offset, char **res)
             if (l == 0) {
                 l = p1 - (start + offset) + 2;
             }
+            if (poffset > max) {
+                return 0;
+            }
             has_pointer = 1;
             p1 = start + poffset;
             nn = *p1;
         }
         //printf("nn=%02x\n",nn);
         p1++;
+        if (((p1 + nn) - start) > max) {
+            return 0;
+        }
         strncat(buf, p1, nn);
         p1 += nn;
         nn = *p1;
@@ -135,8 +145,9 @@ size_t parse_rname(char *start, size_t offset, char **res)
  *       you must free the dns_rr->name and dns_rr->rdata 
  *         before you free the dns_rr struct 
  */
-size_t parse_rr(char *start, size_t offset, size_t ncount,
-                struct dns_rr ** res)
+size_t
+parse_rr(char *start, size_t offset, size_t ncount,
+         size_t max, struct dns_rr ** res)
 {
     size_t rname_len = 0;
     size_t rr_len = 0;
@@ -144,6 +155,9 @@ size_t parse_rr(char *start, size_t offset, size_t ncount,
     struct dns_rr *rr_head = NULL, *rr_cur = NULL;
     int i;
     p = start + offset;
+    if (offset > max) {
+        return 0;
+    }
     for (i = 0; i < ncount; i++) {
         if (i == 0) {
             rr_head = (struct dns_rr *) malloc(sizeof(struct dns_rr));
@@ -154,8 +168,14 @@ size_t parse_rr(char *start, size_t offset, size_t ncount,
             rr_cur = rr_cur->next;
             memset(rr_cur, 0, sizeof(struct dns_rr));
         }
-        rname_len = parse_rname(start, p - start, &(rr_cur->name));
+        rname_len = parse_rname(start, p - start, max, &(rr_cur->name));
+        if (rname_len == 0) {
+            goto err;
+        }
         p += rname_len;
+        if (((p + 8) - start) > max) {
+            goto err;
+        }
         rr_cur->type = ntohs(*(uint16_t *) p);
         p += 2;
         rr_cur->cls = ntohs(*(uint16_t *) p);
@@ -164,8 +184,11 @@ size_t parse_rr(char *start, size_t offset, size_t ncount,
         p += 4;
         rr_cur->rdlength = ntohs(*(uint16_t *) p);
         p += 2;
+        if (((p + rr_cur->rdlength) - start) > max) {
+            goto err;
+        }
         if (rr_cur->type == RR_CNAME) {
-            parse_rname(start, p - start, (char **) &(rr_cur->rdata));
+            parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_A) {
             char d[20];
             if (inet_ntop(AF_INET, (void *) p, d, 20)) {
@@ -176,7 +199,7 @@ size_t parse_rr(char *start, size_t offset, size_t ncount,
             }
             //rr_cur->rdata=strdup(inet_ntoa(*(struct in_addr*)p));
         } else if (rr_cur->type == RR_NS) {
-            parse_rname(start, p - start, (char **) &(rr_cur->rdata));
+            parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_AAAA) {
             char dst[64];
             if (inet_ntop(AF_INET6, (void *) p, dst, 64)) {
@@ -190,7 +213,7 @@ size_t parse_rr(char *start, size_t offset, size_t ncount,
             mx = malloc(sizeof(struct mx_rdata));
             mx->preference = ntohs(*((uint16_t *) p));
             //printf("mx preference=%02x\n",mx->preference);
-            parse_rname(start, p - start + 2, &(mx->domain));
+            parse_rname(start, p - start + 2, max, &(mx->domain));
             //printf("mx domain: %s\n",mx->domain);
             rr_cur->rdata = mx;
         } else if (rr_cur->type == RR_TXT) {
@@ -209,6 +232,10 @@ size_t parse_rr(char *start, size_t offset, size_t ncount,
     rr_len = p - (start + offset);
     *res = rr_head;
     return rr_len;
+  err:
+    if (rr_head)
+        free_rr(rr_head);
+    return 0;
 }
 
 void dump_header(char *p)
@@ -284,7 +311,7 @@ void free_rr(struct dns_rr *rr)
     struct dns_rr *tmp, *tmp1;
     if (rr == NULL)
         return;
-    for (tmp = rr; tmp; ) {
+    for (tmp = rr; tmp;) {
         tmp1 = tmp->next;
         if (tmp->name)
             free(tmp->name);
@@ -298,7 +325,7 @@ void free_rr(struct dns_rr *rr)
             free(tmp->rdata);
         }
         free(tmp);
-        tmp=tmp1;
+        tmp = tmp1;
     }
 }
 
@@ -336,22 +363,36 @@ int bind_request(char *domain, uint16_t qtype, char **res)
     return hdr_len;
 }
 
-size_t parse_qd(char *start, size_t offset, struct dns_rr ** res)
+size_t parse_qd(char *start, size_t offset, size_t max,
+                struct dns_rr ** res)
 {
     char *p1;
     struct dns_rr *r;
     size_t len;
     p1 = start + offset;
+    if (offset > max) {
+        return 0;
+    }
     r = malloc(sizeof(struct dns_rr));
     memset(r, 0, sizeof(struct dns_rr));
-    len = parse_rname(start, offset, &r->name);
+    len = parse_rname(start, offset, max, &r->name);
+    if (len == 0) {
+        goto err;
+    }
     p1 += len;
+    if (((p1 + 4) - start) > max) {
+        goto err;
+    }
     r->type = ntohs(*(uint16_t *) p1);
     p1 += 2;
     r->cls = ntohs(*(uint16_t *) p1);
     p1 += 2;
     *res = r;
     return (p1 - (start + offset));
+  err:
+    if (r)
+        free_rr(r);
+    return 0;
 }
 
 int parse_msg(struct dns_msg *m)
@@ -366,14 +407,17 @@ int parse_msg(struct dns_msg *m)
     offset = sizeof(struct msg_header);
     l = ntohs(m->hdr->qdcount);
     if (l) {
-        m->qd_len = parse_qd(p1, offset, &(m->qd));
+        m->qd_len = parse_qd(p1, offset, m->msg_len, &(m->qd));
+        if (m->qd_len == 0) {
+            return 0;
+        }
         offset += m->qd_len;
         //printf("qd qd_len %02x %s type: %02x, class: %02x\n",
         //       m->qd_len,m->qd->name,m->qd->type,m->qd->cls);
     }
     l = ntohs(m->hdr->ancount);
     if (l) {
-        m->an_len = parse_rr(p1, offset, l, &(m->an));
+        m->an_len = parse_rr(p1, offset, l, m->msg_len, &(m->an));
         offset += m->an_len;
         /*
            printf("an %s type: %02x, class: %02x\n",
@@ -382,7 +426,7 @@ int parse_msg(struct dns_msg *m)
     }
     l = ntohs(m->hdr->nscount);
     if (l) {
-        m->ns_len = parse_rr(p1, offset, l, &m->ns);
+        m->ns_len = parse_rr(p1, offset, l, m->msg_len, &m->ns);
         offset += m->ns_len;
         /*
            printf("ns %s type: %02x, class: %02x\n",
@@ -391,7 +435,7 @@ int parse_msg(struct dns_msg *m)
     }
     l = ntohs(m->hdr->arcount);
     if (l) {
-        m->ar_len = parse_rr(p1, offset, l, &m->ar);
+        m->ar_len = parse_rr(p1, offset, l, m->msg_len, &m->ar);
         offset += m->ar_len;
         /* printf("ar %s type: %02x, class: %02x\n",
            m->ar->name,m->ar->type,m->ar->cls);
