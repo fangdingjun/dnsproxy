@@ -49,8 +49,8 @@ void free_dns_msg(struct dns_msg *m);
 void dump_header(char *buf);
 size_t set_qname(char *dest, char *dname);
 size_t parse_rr(char *start, size_t offset, size_t ncount,
-                struct dns_rr **res);
-size_t parse_rname(char *start, size_t offset, char **res);
+                size_t max, struct dns_rr **res);
+size_t parse_rname(char *start, size_t offset, size_t max, char **res);
 
 int parse_msg(struct dns_msg *m);
 void print_rr(struct dns_rr *rr);
