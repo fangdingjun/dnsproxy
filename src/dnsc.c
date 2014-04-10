@@ -1,11 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef WIN32
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#else
+#include <winsock2.h>
+#endif
 #include <getopt.h>
 #include <unistd.h>
 #include "dns.h"
@@ -75,7 +79,10 @@ int main(int argc, char *argv[])
     domain = argv[optind];
     msg_len = bind_request(domain, q_type, &msg);
     //dump_header(msg);
-
+#ifdef WIN32
+    WSADATA wsaData;
+    WSAStartup(0x2020,&wsaData);
+#endif
     memset(&srvaddr, 0, sizeof(srvaddr));
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
