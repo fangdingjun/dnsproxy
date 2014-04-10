@@ -1,4 +1,5 @@
 #include <glib.h>
+#include <unistd.h>
 #include <string.h>
 #include <gio/gio.h>
 #include <ctype.h>
@@ -30,7 +31,8 @@ gchar *cfg = "[dnsproxy]\n"
     ",159.106.121.75,169.132.13.103,192.67.198.6,202.106.1.2,202.181.7.85,203.161.230.171"
     ",203.98.7.65,207.12.88.98,208.56.31.43,209.145.54.50,209.220.30.174,209.36.73.33"
     ",209.85.229.138,211.94.66.147,213.169.251.35,216.221.188.182,216.234.179.13"
-    ",243.185.187.3,243.185.187.39\n";
+    ",243.185.187.3,243.185.187.39\n"
+    "daemon=0\n";
 
 //static gchar *server_ip = "8.8.8.8";
 
@@ -47,7 +49,7 @@ GList *srvlist = NULL;
 
 /* blacklist */
 gchar *blacklist = NULL;
-
+gboolean is_daemon = FALSE;
 /* this struct will pass to event callback */
 struct dnsmsginfo {
     GSocket *sock_listen;       /* listen socket */
@@ -161,7 +163,12 @@ void get_config(gchar * cfname)
     } else {
         blacklist = blist;
     }
-
+    is_daemon = g_key_file_get_boolean(keyfile, "dnsproxy", "daemon", &error);
+    if(error){
+        g_warning("%s", error->message);
+        g_error_free(error);
+        error=NULL;
+    }
   err1:
     /* free key file */
     g_key_file_free(keyfile);
@@ -560,6 +567,11 @@ int main(int argc, char *argv[])
 #ifdef G_OS_WIN32
     g_networking_init();
 #endif                          /*  */
+
+    if(is_daemon){
+        g_message("fork to background\n");
+        daemon(0,1);
+    }
 
     g_debug("create listen socket");
     sock =
