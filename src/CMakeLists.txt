@@ -22,4 +22,5 @@ add_executable(dnsc dnsc.c dnsutil.c)
 #target_link_libraries(dnssrv ${GLIB_LIBRARIES} ${GIO_LIBRARIES})
 
 add_executable(dnsproxy dnsproxy.c dnsutil.c)
-target_link_libraries(dnsproxy ${GLIB_LIBRARIES} ${GIO_LIBRARIES})
+target_link_libraries(dnsproxy ws2_32 ${GLIB_LIBRARIES} ${GIO_LIBRARIES})
+target_link_libraries(dnsc ws2_32)
