@@ -56,6 +56,7 @@ struct dnsmsginfo {
     GSource *timeout_source;    /* timeout source */
     GSource *srv_source;        /* server source */
     GSocket *sock_srv;          /* server socket */
+    gboolean is_responsed;      /* response to client or not */
 };
 
 /* get configure*/
@@ -224,8 +225,10 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
         msg->client_addr = caddr;
         msg->client_msg = g_string_new_len(buf, nbytes);
 
+        msg->is_responsed = FALSE;
+
         /* create server response timeout event source */
-        timeout = g_timeout_source_new_seconds(5);
+        timeout = g_timeout_source_new_seconds(3);
         g_source_set_callback(timeout, timeout_server, msg, NULL);
         g_source_attach(timeout, NULL);
 
@@ -460,21 +463,23 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
 
             /* found */
             if (black_ip_found) {
-                g_warning("badip found, continue");
+                g_debug("badip found, continue");
                 continue;
             }
         }
+        if(!msg->is_responsed){
+            g_debug("send to client");
+            if ((g_socket_send_to
+                        (msg->sock_listen, msg->client_addr, buf, nbytes, NULL,
+                         &error)) == -1) {
 
-        g_debug("send to client");
-        if ((g_socket_send_to
-             (msg->sock_listen, msg->client_addr, buf, nbytes, NULL,
-              &error)) == -1) {
-
-            /* error */
-            g_warning("%s", error->message);
-            g_error_free(error);
-            error = NULL;
-            break;
+                /* error */
+                g_warning("%s", error->message);
+                g_error_free(error);
+                error = NULL;
+                break;
+            }
+            msg->is_responsed = TRUE;
         }
     }
 
