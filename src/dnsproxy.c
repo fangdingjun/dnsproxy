@@ -1,44 +1,65 @@
 #include <glib.h>
 #include <string.h>
 #include <gio/gio.h>
+#include <ctype.h>
 #ifdef G_OS_WIN32
 #include <gio/gnetworking.h>
 #endif                          /*  win32 */
 
 #include "dns.h"
 
-static gchar *local_ip = "0.0.0.0";
+/* default local ip */
+static gchar *local_ip = "127.0.0.1";
+
+/* default port */
+static gint listen_port = 53;
+
+/* default config file name */
+gchar *cfgfile = "dnsproxy.cfg";
+
+/* default config */
+gchar *cfg = "[dnsproxy]\n"
+    "listen_ip=0.0.0.0\n"
+    "listen_port=53\n"
+    "servers=8.8.8.8,4.2.2.2,114.114.114.114,223.6.6.6\n"
+    "#gfw bad ip list from https://github.com/goagent/goagent/blob/3.0/local/proxy.ini\n"
+    "blacklist=1.1.1.1,255.255.255.255,74.125.127.102,74.125.155.102,74.125.39.102"
+    ",74.125.39.113,209.85.229.138,4.36.66.178,8.7.198.45,37.61.54.158,46.82.174.68"
+    ",59.24.3.173,64.33.88.161,64.33.99.47,64.66.163.251,65.104.202.252,65.160.219.113"
+    ",66.45.252.237,72.14.205.104,72.14.205.99,78.16.49.15,93.46.8.89,128.121.126.139"
+    ",159.106.121.75,169.132.13.103,192.67.198.6,202.106.1.2,202.181.7.85,203.161.230.171"
+    ",203.98.7.65,207.12.88.98,208.56.31.43,209.145.54.50,209.220.30.174,209.36.73.33"
+    ",209.85.229.138,211.94.66.147,213.169.251.35,216.221.188.182,216.234.179.13"
+    ",243.185.187.3,243.185.187.39\n";
 
 //static gchar *server_ip = "8.8.8.8";
 
 /* the remote dns server to forward to */
-static gchar *servers[] = {
-    "8.8.8.8",
-    "223.6.6.6",
-    "114.114.114.114",
-    "4.2.2.2",
-    NULL
-};
+static gchar **servers = NULL;
+
+/* default server list */
+gchar *default_servers[] = { "8.8.8.8", "4.2.2.2", NULL };
+
+//gsize num_srv=0;
 
 /* server GSocketAddress list */
 GList *srvlist = NULL;
 
-/*
- * gfw bad ip list from https://github.com/goagent/goagent/blob/3.0/local/proxy.ini
- *
- */
-gchar *blacklist =
-    "1.1.1.1|255.255.255.255|74.125.127.102|74.125.155.102|74.125.39.102|74.125.39.113|209.85.229.138|4.36.66.178|8.7.198.45|37.61.54.158|46.82.174.68|59.24.3.173|64.33.88.161|64.33.99.47|64.66.163.251|65.104.202.252|65.160.219.113|66.45.252.237|72.14.205.104|72.14.205.99|78.16.49.15|93.46.8.89|128.121.126.139|159.106.121.75|169.132.13.103|192.67.198.6|202.106.1.2|202.181.7.85|203.161.230.171|203.98.7.65|207.12.88.98|208.56.31.43|209.145.54.50|209.220.30.174|209.36.73.33|209.85.229.138|211.94.66.147|213.169.251.35|216.221.188.182|216.234.179.13|243.185.187.3|243.185.187.39";
+/* blacklist */
+gchar *blacklist = NULL;
 
 /* this struct will pass to event callback */
 struct dnsmsginfo {
-    GSocket *sock_listen;              /* listen socket */
-    GSocketAddress *client_addr;      /* client address */
-    GString *client_msg;              /* dns msg from client */
-    GSource *timeout_source;           /* timeout source */
-    GSource *srv_source;               /* server source */
+    GSocket *sock_listen;       /* listen socket */
+    GSocketAddress *client_addr;    /* client address */
+    GString *client_msg;        /* dns msg from client */
+    GSource *timeout_source;    /* timeout source */
+    GSource *srv_source;        /* server source */
     GSocket *sock_srv;          /* server socket */
 };
+
+/* get configure*/
+void get_config(gchar * cfgfn);
 
 // function define
 /* server response callback */
@@ -54,6 +75,98 @@ gboolean process_client_msg(struct dnsmsginfo *msg);
 
 /* server response timeout callback */
 gboolean timeout_server(gpointer data);
+
+/* parse config file */
+void get_config(gchar * cfname)
+{
+    GKeyFile *keyfile;
+    GError *error = NULL;
+
+    gchar *ip;
+    gint port = 0;
+    gchar **s;
+    gchar *blist;
+
+    /* initial key file */
+    keyfile = g_key_file_new();
+
+    /* string separate by ',' */
+    g_key_file_set_list_separator(keyfile, ',');
+
+    /* check if config file is exists */
+    if (g_file_test(cfname, G_FILE_TEST_IS_REGULAR)) {
+        g_message("load config from %s\n", cfname);
+
+        /* load config file */
+        if (!g_key_file_load_from_file(keyfile,
+                                       cfname, G_KEY_FILE_NONE, &error)) {
+            g_warning("%s", error->message);
+            g_error_free(error);
+            error = NULL;
+            goto err1;
+        }
+    } else {
+        g_warning("%s does not exists, load default config\n", cfname);
+
+        /* load default config */
+        if (!g_key_file_load_from_data(keyfile,
+                                       cfg, -1, G_KEY_FILE_NONE, &error)) {
+            g_warning("%s", error->message);
+            g_error_free(error);
+            error = NULL;
+            goto err1;
+        }
+    }
+
+    /* get listen_ip */
+    ip = g_key_file_get_string(keyfile, "dnsproxy", "listen_ip", &error);
+    if (ip == NULL) {
+        g_warning("%s", error->message);
+        g_error_free(error);
+        error = NULL;
+    } else {
+        local_ip = ip;
+    }
+
+    /* get listen_port */
+    port =
+        g_key_file_get_integer(keyfile, "dnsproxy", "listen_port", &error);
+    if (error) {
+        g_warning("%s", error->message);
+        g_error_free(error);
+        error = NULL;
+    } else {
+        listen_port = port;
+    }
+
+    /* get servers */
+    s = g_key_file_get_string_list(keyfile, "dnsproxy", "servers", NULL,
+                                   &error);
+    if (s == NULL) {
+        g_warning("%s", error->message);
+        g_error_free(error);
+        error = NULL;
+    } else {
+        servers = s;
+    }
+
+    /* get blacklist */
+    blist =
+        g_key_file_get_string(keyfile, "dnsproxy", "blacklist", &error);
+    if (blist == NULL) {
+        g_warning("%s", error->message);
+        g_error_free(error);
+        error = NULL;
+    } else {
+        blacklist = blist;
+    }
+
+  err1:
+    /* free key file */
+    g_key_file_free(keyfile);
+    return;
+}
+
 
 /*
  * the callback function for client request
@@ -91,6 +204,7 @@ gboolean read_from_client(GSocket * sock, GIOCondition cond,
             error = NULL;
             break;
         }
+
         GInetAddress *cinet;
         cinet = g_inet_socket_address_get_address((GInetSocketAddress *)
                                                   caddr);
@@ -232,8 +346,8 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
         g_debug("send to %s:%d", ip, 53);
 
         if ((g_socket_send_to
-             (sock, saddr, msg->client_msg->str, msg->client_msg->len, NULL,
-              &error) == -1)) {
+             (sock, saddr, msg->client_msg->str, msg->client_msg->len,
+              NULL, &error) == -1)) {
             // on error
             g_warning("%s", error->message);
             g_error_free(error);
@@ -315,43 +429,46 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
         g_free(addr);
 
         g_object_unref(saddr);
+        if (blacklist) {
+            /* prepare for parsing dns message */
+            struct dns_msg *m;
+            m = g_new0(struct dns_msg, 1);
+            m->msg_len = nbytes;
+            m->buf = g_malloc0(nbytes);
+            memcpy(m->buf, buf, nbytes);
+            struct dns_rr *r;
+            gchar *p1;
 
-        /* prepare for parsing dns message */
-        struct dns_msg *m;
-        m = g_new0(struct dns_msg, 1);
-        m->msg_len = nbytes;
-        m->buf = g_malloc0(nbytes);
-        memcpy(m->buf, buf, nbytes);
-        struct dns_rr *r;
-        gchar *p1;
+            /* parse */
+            parse_msg(m);
 
-        /* parse */
-        parse_msg(m);
-
-        /* check blacklist ip */
-        for (r = m->an; r != NULL; r = r->next) {
-            if (r->type == RR_A) {
-                p1 = g_strstr_len(blacklist, -1, (gchar *) r->rdata);
-                if (p1) {
-                    g_debug("found blacklist ip %s", (gchar *) r->rdata);
-                    black_ip_found = 1;
-                    break;
+            /* check blacklist ip */
+            for (r = m->an; r != NULL; r = r->next) {
+                if (r->type == RR_A) {
+                    p1 = g_strstr_len(blacklist, -1, (gchar *) r->rdata);
+                    if (p1) {
+                        g_debug("found blacklist ip %s",
+                                (gchar *) r->rdata);
+                        black_ip_found = 1;
+                        break;
+                    }
                 }
             }
-        }
 
-        /* free */
-        free_dns_msg(m);
+            /* free */
+            free_dns_msg(m);
 
-        /* found */
-        if (black_ip_found) {
-            g_warning("badip found, continue");
-            continue;
+            /* found */
+            if (black_ip_found) {
+                g_warning("badip found, continue");
+                continue;
+            }
         }
 
         g_debug("send to client");
         if ((g_socket_send_to
-             (msg->sock_listen, msg->client_addr, buf, nbytes, NULL, &error)) == -1) {
+             (msg->sock_listen, msg->client_addr, buf, nbytes, NULL,
+              &error)) == -1) {
 
             /* error */
             g_warning("%s", error->message);
@@ -390,8 +507,14 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
 
 /* command line options */
 static GOptionEntry entries[] = {
-    {"local_ip", 'l', 0, G_OPTION_ARG_STRING, &local_ip,
-     "local ip address to listen on", "IP"},
+    /*{"local_ip", 'l', 0, G_OPTION_ARG_STRING, &local_ip,
+       "local ip address to listen on", "IP"}, */
+    {"config", 'c', 0, G_OPTION_ARG_STRING, &cfgfile,
+     "config file", "FILE"},
+    /*{"port", 'p', 0, G_OPTION_ARG_INT, &listen_port,
+       "the port listen to", "PORT"},
+       {"blacklist", 'b', 0, G_OPTION_ARG_STRING, &blacklist,
+       "the ip blacklist", "LIST"}, */
     /*{"server", 's', 0, G_OPTION_ARG_STRING, &server_ip,
        "the upstream dns server to forward to",
        "SERVER"},
@@ -410,6 +533,7 @@ int main(int argc, char *argv[])
 
     gint i;
 
+    servers = default_servers;
     context = g_option_context_new("- dns proxy server");
     g_option_context_add_main_entries(context, entries, NULL);
 
@@ -422,6 +546,8 @@ int main(int argc, char *argv[])
     }
 
     g_message("beginning...");
+
+    get_config(cfgfile);
 
     /* initial */
     g_type_init();
@@ -449,7 +575,7 @@ int main(int argc, char *argv[])
     /* create local address */
     laddr =
         g_inet_socket_address_new(g_inet_address_new_from_string(local_ip),
-                                  53);
+                                  listen_port);
 
     g_debug("bind to local");
     if (!g_socket_bind(sock, laddr, TRUE, &error)) {
@@ -461,18 +587,33 @@ int main(int argc, char *argv[])
         goto err2;
     }
 
-    g_message("listen to %s:%d", local_ip, 53);
+    g_message("listen to %s:%d", local_ip, listen_port);
     //g_message("forward to server %s:%d", server_ip, 53);
 
     g_debug("create server socket address");
+    GInetAddress *inetaddr;
+    gchar *s;
     for (i = 0;; i++) {
         GSocketAddress *srvaddr;
         if (servers[i] == NULL) {
             break;
         }
-        srvaddr =
-            g_inet_socket_address_new(g_inet_address_new_from_string
-                                      (servers[i]), 53);
+        s = servers[i];
+
+        /* strip the space at beginning */
+        while (isspace(*s))
+            s++;
+
+        g_debug("server '%s'", s);
+        inetaddr = g_inet_address_new_from_string(s);
+        if (inetaddr == NULL) {
+            g_debug("create inet address failed");
+            continue;
+        }
+        srvaddr = g_inet_socket_address_new(inetaddr, 53);
+        if (srvaddr == NULL) {
+            continue;
+        }
         srvlist = g_list_append(srvlist, srvaddr);
     }
 
@@ -497,6 +638,12 @@ int main(int argc, char *argv[])
     //g_source_unref(esrc);
     //g_object_unref(sock);
     g_warning("end");
+
+    /*
+       g_strfreev(servers);
+       g_free(local_ip);
+       g_free(blacklist);
+     */
     return 0;
 
   err2:
