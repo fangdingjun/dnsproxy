@@ -2,10 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <stdlib.h>
 #include <stdint.h>
+#ifndef WIN32
 #include <arpa/inet.h>
+#else
+#include <winsock2.h>
+#endif
 #include <unistd.h>
 //#include <sys/time.h>
 //#include <sys/select.h>
@@ -190,6 +193,9 @@ parse_rr(char *start, size_t offset, size_t ncount,
         if (rr_cur->type == RR_CNAME) {
             parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_A) {
+#ifdef WIN32
+            rr_cur->rdata=strdup(inet_ntoa(*((struct in_addr*)p)));
+#else
             char d[20];
             if (inet_ntop(AF_INET, (void *) p, d, 20)) {
                 rr_cur->rdata = strdup(d);
@@ -197,10 +203,12 @@ parse_rr(char *start, size_t offset, size_t ncount,
                 perror("inet_ntop");
                 rr_cur->rdata = NULL;
             }
+#endif
             //rr_cur->rdata=strdup(inet_ntoa(*(struct in_addr*)p));
         } else if (rr_cur->type == RR_NS) {
             parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_AAAA) {
+#ifndef WIN32
             char dst[64];
             if (inet_ntop(AF_INET6, (void *) p, dst, 64)) {
                 rr_cur->rdata = strdup(dst);
@@ -208,6 +216,9 @@ parse_rr(char *start, size_t offset, size_t ncount,
                 perror("inet_ntop");
                 rr_cur->rdata = NULL;
             }
+#else
+            rr_cur->rdata = NULL;
+#endif
         } else if (rr_cur->type == RR_MX) {
             struct mx_rdata *mx;
             mx = malloc(sizeof(struct mx_rdata));
