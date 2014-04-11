@@ -560,10 +560,12 @@ int main(int argc, char *argv[])
     g_networking_init();
 #endif                          /*  */
 
+#ifndef G_OS_WIN32
     if (is_daemon) {
         g_message("fork to background\n");
         daemon(0, 1);
     }
+#endif
 
     g_debug("create listen socket");
     sock =
