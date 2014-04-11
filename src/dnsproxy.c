@@ -18,12 +18,17 @@ static gint listen_port = 53;
 /* default config file name */
 gchar *cfgfile = "dnsproxy.cfg";
 
+/*
+ * DNS cache pollution, refer to
+ * http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93
+ * 
+ */
+
 /* default config */
 gchar *cfg = "[dnsproxy]\n"
     "listen_ip=0.0.0.0\n"
     "listen_port=53\n"
     "servers=8.8.8.8,4.2.2.2,114.114.114.114,223.6.6.6\n"
-    "#gfw bad ip list from https://github.com/goagent/goagent/blob/3.0/local/proxy.ini\n"
     "blacklist=1.1.1.1,255.255.255.255,74.125.127.102,74.125.155.102,74.125.39.102"
     ",74.125.39.113,209.85.229.138,4.36.66.178,8.7.198.45,37.61.54.158,46.82.174.68"
     ",59.24.3.173,64.33.88.161,64.33.99.47,64.66.163.251,65.104.202.252,65.160.219.113"
