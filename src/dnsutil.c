@@ -193,10 +193,20 @@ parse_rr(char *start, size_t offset, size_t ncount,
         if (rr_cur->type == RR_CNAME) {
             parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_A) {
-#ifdef WIN32
-            rr_cur->rdata=strdup(inet_ntoa(*((struct in_addr*)p)));
-#else
             char d[20];
+#ifdef WIN32 /* win32 */
+            DWORD buflen = sizeof(d), addrlen;
+            struct sockaddr_storage sa;
+            struct sockaddr_in *sin = (struct sockaddr_in *) &sa;
+            addrlen = sizeof(*sin);
+            memcpy(&sin->sin_addr, p, sizeof(sin->sin_addr));
+            if (WSAAddressToString
+                ((LPSOCKADDR) & sa, addrlen, NULL, d, &buflen) != 0) {
+                rr_cur->data = NULL;
+            } else {
+                rr_cur->data = strdup(d);
+            }
+#else  /* Linux */
             if (inet_ntop(AF_INET, (void *) p, d, 20)) {
                 rr_cur->rdata = strdup(d);
             } else {
@@ -208,16 +218,27 @@ parse_rr(char *start, size_t offset, size_t ncount,
         } else if (rr_cur->type == RR_NS) {
             parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_AAAA) {
-#ifndef WIN32
             char dst[64];
+
+#ifndef WIN32 /* Linux */
             if (inet_ntop(AF_INET6, (void *) p, dst, 64)) {
                 rr_cur->rdata = strdup(dst);
             } else {
                 perror("inet_ntop");
                 rr_cur->rdata = NULL;
             }
-#else
-            rr_cur->rdata = NULL;
+#else  /* win32 */
+            DWORD buflen = sizeof(dst), addrlen;
+            struct sockaddr_storage sa;
+            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &sa;
+            addrlen = sizeof(*sin6);
+            memcpy(&sin6->sin6_addr, p, sizeof(sin6->sin6_addr));
+            if (WSAAddressToString
+                ((LPSOCKADDR) & sa, addrlen, NULL, dst, &buflen) != 0) {
+                rr_cur->data = NULL;
+            } else {
+                rr_cur->data = strdup(dst);
+            }
 #endif
         } else if (rr_cur->type == RR_MX) {
             struct mx_rdata *mx;
