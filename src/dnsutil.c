@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -8,6 +7,7 @@
 #include <arpa/inet.h>
 #else
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #endif
 #include <unistd.h>
 //#include <sys/time.h>
@@ -198,13 +198,15 @@ parse_rr(char *start, size_t offset, size_t ncount,
             DWORD buflen = sizeof(d), addrlen;
             struct sockaddr_storage sa;
             struct sockaddr_in *sin = (struct sockaddr_in *) &sa;
+            memset(&sa, 0, sizeof(sa));
             addrlen = sizeof(*sin);
+            sa.ss_family = AF_INET;
             memcpy(&sin->sin_addr, p, sizeof(sin->sin_addr));
             if (WSAAddressToString
                 ((LPSOCKADDR) & sa, addrlen, NULL, d, &buflen) != 0) {
-                rr_cur->data = NULL;
+                rr_cur->rdata = NULL;
             } else {
-                rr_cur->data = strdup(d);
+                rr_cur->rdata = strdup(d);
             }
 #else  /* Linux */
             if (inet_ntop(AF_INET, (void *) p, d, 20)) {
@@ -231,13 +233,15 @@ parse_rr(char *start, size_t offset, size_t ncount,
             DWORD buflen = sizeof(dst), addrlen;
             struct sockaddr_storage sa;
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &sa;
+            memset(&sa, 0, sizeof(sa));
+            sa.ss_family = AF_INET6;
             addrlen = sizeof(*sin6);
             memcpy(&sin6->sin6_addr, p, sizeof(sin6->sin6_addr));
             if (WSAAddressToString
                 ((LPSOCKADDR) & sa, addrlen, NULL, dst, &buflen) != 0) {
-                rr_cur->data = NULL;
+                rr_cur->rdata = NULL;
             } else {
-                rr_cur->data = strdup(dst);
+                rr_cur->rdata = strdup(dst);
             }
 #endif
         } else if (rr_cur->type == RR_MX) {
