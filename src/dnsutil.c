@@ -194,7 +194,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
             parse_rname(start, p - start, max, (char **) &(rr_cur->rdata));
         } else if (rr_cur->type == RR_A) {
             char d[20];
-#ifdef WIN32 /* win32 */
+#ifdef WIN32                    /* win32 */
             DWORD buflen = sizeof(d), addrlen;
             struct sockaddr_storage sa;
             struct sockaddr_in *sin = (struct sockaddr_in *) &sa;
@@ -208,7 +208,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
             } else {
                 rr_cur->rdata = strdup(d);
             }
-#else  /* Linux */
+#else                           /* Linux */
             if (inet_ntop(AF_INET, (void *) p, d, 20)) {
                 rr_cur->rdata = strdup(d);
             } else {
@@ -222,14 +222,14 @@ parse_rr(char *start, size_t offset, size_t ncount,
         } else if (rr_cur->type == RR_AAAA) {
             char dst[64];
 
-#ifndef WIN32 /* Linux */
+#ifndef WIN32                   /* Linux */
             if (inet_ntop(AF_INET6, (void *) p, dst, 64)) {
                 rr_cur->rdata = strdup(dst);
             } else {
                 perror("inet_ntop");
                 rr_cur->rdata = NULL;
             }
-#else  /* win32 */
+#else                           /* win32 */
             DWORD buflen = sizeof(dst), addrlen;
             struct sockaddr_storage sa;
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &sa;
