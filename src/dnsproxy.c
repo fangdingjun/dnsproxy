@@ -18,43 +18,43 @@ static gint listen_port = 53;
 /* default config file name */
 gchar *cfgfile = "dnsproxy.cfg";
 
-/*
- * DNS cache pollution, refer to
- * http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93
- * 
- */
-
-/* default config */
-gchar *cfg = "[dnsproxy]\n"
-    "listen_ip=0.0.0.0\n"
-    "listen_port=53\n"
-    "servers=8.8.8.8,4.2.2.2,114.114.114.114,223.6.6.6\n"
-    "blacklist=1.1.1.1,255.255.255.255,74.125.127.102,74.125.155.102,74.125.39.102"
-    ",74.125.39.113,209.85.229.138,4.36.66.178,8.7.198.45,37.61.54.158,46.82.174.68"
-    ",59.24.3.173,64.33.88.161,64.33.99.47,64.66.163.251,65.104.202.252,65.160.219.113"
-    ",66.45.252.237,72.14.205.104,72.14.205.99,78.16.49.15,93.46.8.89,128.121.126.139"
-    ",159.106.121.75,169.132.13.103,192.67.198.6,202.106.1.2,202.181.7.85,203.161.230.171"
-    ",203.98.7.65,207.12.88.98,208.56.31.43,209.145.54.50,209.220.30.174,209.36.73.33"
-    ",209.85.229.138,211.94.66.147,213.169.251.35,216.221.188.182,216.234.179.13"
-    ",243.185.187.3,243.185.187.39\n"
-    "daemon=0\n";
-
-//static gchar *server_ip = "8.8.8.8";
-
 /* the remote dns server to forward to */
 static gchar **servers = NULL;
 
 /* default server list */
-gchar *default_servers[] = { "8.8.8.8", "4.2.2.2", NULL };
+gchar *default_servers[] = {
+    "8.8.8.8",
+    "4.2.2.2",
+    "114.114.114.114",
+    "223.6.6.6",
+    NULL
+};
 
 //gsize num_srv=0;
 
 /* server GSocketAddress list */
 GList *srvlist = NULL;
 
+/*
+ * DNS cache pollution, refer to
+ * http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93
+ * 
+ */
 /* blacklist */
-gchar *blacklist = NULL;
+gchar *blacklist =
+    "1.1.1.1,255.255.255.255,74.125.127.102,74.125.155.102,74.125.39.102"
+    ",74.125.39.113,209.85.229.138,4.36.66.178,8.7.198.45,37.61.54.158,46.82.174.68"
+    ",59.24.3.173,64.33.88.161,64.33.99.47,64.66.163.251,65.104.202.252,65.160.219.113"
+    ",66.45.252.237,72.14.205.104,72.14.205.99,78.16.49.15,93.46.8.89,128.121.126.139"
+    ",159.106.121.75,169.132.13.103,192.67.198.6,202.106.1.2,202.181.7.85,203.161.230.171"
+    ",203.98.7.65,207.12.88.98,208.56.31.43,209.145.54.50,209.220.30.174,209.36.73.33"
+    ",209.85.229.138,211.94.66.147,213.169.251.35,216.221.188.182,216.234.179.13"
+    ",243.185.187.3,243.185.187.39";
+
+
+/* daemon or not */
 gboolean is_daemon = FALSE;
+
 /* this struct will pass to event callback */
 struct dnsmsginfo {
     GSocket *sock_listen;       /* listen socket */
@@ -114,16 +114,8 @@ void get_config(gchar * cfname)
             goto err1;
         }
     } else {
-        g_warning("%s does not exists, load default config\n", cfname);
-
-        /* load default config */
-        if (!g_key_file_load_from_data(keyfile,
-                                       cfg, -1, G_KEY_FILE_NONE, &error)) {
-            g_warning("%s", error->message);
-            g_error_free(error);
-            error = NULL;
-            goto err1;
-        }
+        g_warning("%s does not exists, use default config\n", cfname);
+        goto err1;
     }
 
     /* get listen_ip */
@@ -168,11 +160,12 @@ void get_config(gchar * cfname)
     } else {
         blacklist = blist;
     }
-    is_daemon = g_key_file_get_boolean(keyfile, "dnsproxy", "daemon", &error);
-    if(error){
+    is_daemon =
+        g_key_file_get_boolean(keyfile, "dnsproxy", "daemon", &error);
+    if (error) {
         g_warning("%s", error->message);
         g_error_free(error);
-        error=NULL;
+        error = NULL;
     }
   err1:
     /* free key file */
@@ -340,12 +333,6 @@ gboolean process_client_msg(struct dnsmsginfo * msg)
     g_source_unref(esrc);
     g_object_unref(sock);
 
-    /* create server socket address */
-    /*
-       saddr =
-       g_inet_socket_address_new(g_inet_address_new_from_string
-       (server_ip), 53);
-     */
 
     g_debug("send msg to server");
     GInetAddress *sinet;
@@ -479,11 +466,11 @@ gboolean read_from_server(GSocket * sock, GIOCondition cond, gpointer data)
                 continue;
             }
         }
-        if(!msg->is_responsed){
+        if (!msg->is_responsed) {
             g_debug("send to client");
             if ((g_socket_send_to
-                        (msg->sock_listen, msg->client_addr, buf, nbytes, NULL,
-                         &error)) == -1) {
+                 (msg->sock_listen, msg->client_addr, buf, nbytes, NULL,
+                  &error)) == -1) {
 
                 /* error */
                 g_warning("%s", error->message);
@@ -573,9 +560,9 @@ int main(int argc, char *argv[])
     g_networking_init();
 #endif                          /*  */
 
-    if(is_daemon){
+    if (is_daemon) {
         g_message("fork to background\n");
-        daemon(0,1);
+        daemon(0, 1);
     }
 
     g_debug("create listen socket");
@@ -615,6 +602,9 @@ int main(int argc, char *argv[])
     g_debug("create server socket address");
     GInetAddress *inetaddr;
     gchar *s;
+    gchar *s2;
+
+    /* create server socket address */
     for (i = 0;; i++) {
         GSocketAddress *srvaddr;
         if (servers[i] == NULL) {
@@ -625,6 +615,17 @@ int main(int argc, char *argv[])
         /* strip the space at beginning */
         while (isspace(*s))
             s++;
+
+        /* strip the space at the end */
+        s2 = strchr(s, '\0');
+        if (s2) {
+            s2--;
+            while (isspace(*s2)) {
+                s2--;
+            }
+            s2++;
+            *s2 = '\0';
+        }
 
         g_debug("server '%s'", s);
         inetaddr = g_inet_address_new_from_string(s);
