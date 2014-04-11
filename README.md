@@ -1,16 +1,40 @@
 dnsutil
 =======
 
-there a two part, a dns client write by c, a dns proxy server write by python
+this is a dns proxy server writen by c with glib
 
-the dns proxy server forward the dns query to the upstream dns server by tcp
+the serve have some features:
+  1. forward the request to more than one upstream dns servers and get the fastest response
+  2. use the ip blacklist to avoid DNS cache pollution
+
+##requirement
+ glib runtime and glib development files
+
+on Linux
+ yum install glib2 glib2-devel
+
+on windows
+download gtk+-bundle_xxxxxx_win32.zip
+http://ftp.gnome.org/pub/gnome/binaries/win32/gtk+/2.24/
+
+##compile
+Linux
+   
+   ./gen.sh
+    make
+
+Windows
+
+    cd src
+    cmake -G "MSYS makefiles"
+    make
 
 ##dns server
 
-###dnsproxy.py
-    cd python
-    sudo python dnsproxy.py
-        
+### dnsproxy
+
+    sudo ./dnsproxy 
+
 test the server with this command:
 
     dig @127.0.0.1 twitter.com
@@ -18,13 +42,6 @@ test the server with this command:
 you can set your system dns to 127.0.0.1
 
 ###dnsclient
-
-
-Compile:
-
-    cd c/
-    make
-
 
 Usage:
 
