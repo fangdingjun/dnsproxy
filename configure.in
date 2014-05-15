@@ -12,8 +12,11 @@ AC_PROG_CC
 AC_CANONICAL_HOST
 
 AM_PROG_CC_C_O
+#AC_DISABLE_SHARED
+#AC_PROG_LIBTOOL
 AM_INIT_AUTOMAKE(1.0)
-
+#LT_PREREQ([2.2])
+#LT_INIT([dlopen])
 # Checks for libraries.
 PKG_CHECK_MODULES([GLIB],[glib-2.0],[found_glib=yes],[found_glib=no])
 PKG_CHECK_MODULES([GIO],[gio-2.0])
