@@ -28,10 +28,23 @@
 #endif
 
 #include <time.h>
-
 #include "dns.h"
 
 #define MAX_QUEUE 100
+
+#ifdef WIN32
+#define perror(msg) do {\
+    char *errstr = NULL;\
+    int errcode = WSAGetLastError();\
+    int len = FormatMessage(\
+    FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM,\
+    0, errcode, 0, (char *)&errstr,0,0);\
+    if(len){ printf(msg ": %.*s", len, errstr); } \
+    else{ printf(msg ": unknown error\n");}\
+    LocalFree(errstr);\
+ }while(0)
+#define close closesocket
+#endif
 
 struct msg_data {
     int listen_fd;
