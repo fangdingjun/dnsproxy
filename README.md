@@ -3,7 +3,7 @@ dnsutil
 
 this is a dns proxy server writen by C
 
-the serve have some features:
+the server have some features:
   1. speedup the dns query
 
     forward the client dns request to more than one dns servers and get the fastest response
@@ -18,7 +18,7 @@ for DNS cache pollution, refer to
 
 there are two versions:
 
- dnsproxy.c is a pure c version, it does not depend the other libraries
+ dnsproxy.c is a pure C version, it does not depend on the other libraries
  
  dnsproxy_glib is a glib version, need glib2
 
@@ -60,7 +60,7 @@ or compile with MinGW
 
 ### dnsproxy
 
-To run dnsproxy, you need superuser privilege to listen on port 53
+To run dnsproxy server, you need superuser privilege to listen on port 53
 
     sudo ./dnsproxy 
 
