@@ -47,19 +47,19 @@
 #endif
 
 struct msg_data {
-    int listen_fd;
-    struct sockaddr_in client_addr;
-    char msg_buf[512];
-    int msg_len;
-    int status;
-    int srv_fd;
-    int fd;
-    time_t last_active;
+    int listen_fd; /* the socket fd to listen */
+    struct sockaddr_in client_addr;  /* client socket address */
+    char msg_buf[512];   /* message buffer from client */
+    int msg_len;   /* the message length */
+    int status;   /* status, 0 for unused, 1 for used */
+    int srv_fd;   /* the server socket fd */
+    int fd;       /* listen fd or server fd */
+    time_t last_active;   /* the time for request in */
 };
 
 char *listen_ip = "127.0.0.1";
 
-int listen_port = 80;
+int listen_port = 53;
 
 char *servers[]={
     "8.8.8.8",
@@ -69,6 +69,9 @@ char *servers[]={
     NULL
 };
 
+/* the ip lists that china GFW used for DNS cache pollution 
+*  http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93
+*/
 char *blacklist="1.1.1.1,255.255.255.255,74.125.127.102,74.125.155.102,74.125.39.102,74.125.39.113,209.85.229.138,4.36.66.178,8.7.198.45,37.61.54.158,46.82.174.68,59.24.3.173,64.33.88.161,64.33.99.47,64.66.163.251,65.104.202.252,65.160.219.113,66.45.252.237,72.14.205.104,72.14.205.99,78.16.49.15,93.46.8.89,128.121.126.139,159.106.121.75,169.132.13.103,192.67.198.6,202.106.1.2,202.181.7.85,203.161.230.171,203.98.7.65,207.12.88.98,208.56.31.43,209.145.54.50,209.220.30.174,209.36.73.33,209.85.229.138,211.94.66.147,213.169.251.35,216.221.188.182,216.234.179.13,243.185.187.3,243.185.187.39";
 
 #ifdef USE_EPOLL
@@ -170,7 +173,7 @@ int recv_from_server(struct msg_data *d)
         return 0;
     }
 
-
+    /* parse the dns message and check the black list */
     do{
         struct dns_msg *m;
         struct dns_rr *rr;
@@ -266,6 +269,7 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef WIN32
+    /* initial the win32 sockets */
     WSADATA wsaData;
     WSAStartup(0x2020,&wsaData);
 #endif
@@ -286,8 +290,8 @@ int main(int argc, char *argv[])
     }
     memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
-    listen_addr.sin_port = htons(53);
-    listen_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    listen_addr.sin_port = htons(listen_port);
+    listen_addr.sin_addr.s_addr = inet_addr(listen_ip);
     if (bind(listen_fd,
              (struct sockaddr *) &listen_addr, sizeof(listen_addr)) < 0) {
         perror("bind");
@@ -313,6 +317,8 @@ int main(int argc, char *argv[])
     int nr_events;
     int i;
     int j;
+    
+    /* starting the loop */
     while (1) {
 #ifdef USE_EPOLL 
         nr_events = epoll_wait(epfd, events, MAX_QUEUE + 1, 3000);
