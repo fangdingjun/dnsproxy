@@ -1,7 +1,7 @@
 dnsutil
 =======
 
-this is a dns proxy server writen by C with glib
+this is a dns proxy server writen by C
 
 the serve have some features:
   1. speedup the dns query
@@ -16,7 +16,14 @@ for DNS cache pollution, refer to
 
 ##requirement
 
-to compile the dnsproxy, you need
+there are two versions:
+
+ dnsproxy.c is a pure c version, it does not depend the other libraries
+ 
+ dnsproxy_glib is a glib version, need glib2
+
+
+to compile the dnsproxy_glib, you need
 
     glib2 runtime files
     glib2 development files
@@ -37,12 +44,18 @@ on Linux
     ./gen.sh
      make
 
-on Windows, install MinGW/MSYS and cmake, compile like this
+on Windows, install MinGW/MSYS and cmake, compile with MSYS
 
     cd src
     cmake -G "MSYS makefiles"
     make
+    
+or compile with MinGW
 
+    cd src
+    cmake -G "MinGW Makefiles"
+    mingw32-make
+    
 ##dns server
 
 ### dnsproxy
