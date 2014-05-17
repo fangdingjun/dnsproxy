@@ -25,7 +25,7 @@
 #include <sys/select.h>
 #endif
 #else
-# error "unsupported methed"
+# error "undefined IO model, please define USE_SELECT or USE_EPOLL macro!!!"
 #endif
 
 #include <time.h>
@@ -35,14 +35,13 @@
 
 #ifdef WIN32
 #define perror(msg) do {\
-    char *errstr = NULL;\
+    char errmsg[1024];\
     int errcode = WSAGetLastError();\
     int len = FormatMessage(\
-    FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM,\
-    0, errcode, 0, (char *)&errstr,0,0);\
-    if(len){ printf(msg ": %.*s", len, errstr); } \
+    FORMAT_MESSAGE_FROM_SYSTEM,\
+    0, errcode, 0, errmsg, sizeof(errmsg), 0);\
+    if(len){ printf(msg ": %s", errmsg); } \
     else{ printf(msg ": unknown error\n");}\
-    LocalFree(errstr);\
  }while(0)
 #define close closesocket
 #endif
@@ -298,7 +297,7 @@ int main(int argc, char *argv[])
     {
         /* avoid errno 10054 on udp socket */
         int reported = 0;
-        int ret = 0;
+        DWORD ret = 0;
         int status = WSAIoctl(listen_fd, SIO_UDP_CONNRESET, &reported,
             sizeof(reported), NULL, 0, &ret, NULL, NULL);
         if (status == SOCKET_ERROR){
