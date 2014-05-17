@@ -35,6 +35,8 @@ if(WIN32)
 
     target_link_libraries(dnsc ws2_32)
     target_link_libraries(dnsproxy ws2_32)
+
+    set_target_properties(dnsproxy PROPERTIES LINK_FLAGS "-Wl,-subsystem,windows")
 else()
     add_definitions( -DUSE_EPOLL)
 endif()
