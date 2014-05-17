@@ -11,6 +11,7 @@
 #else
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <mswsock.h>
 #endif
 
 #include <string.h>
@@ -292,6 +293,20 @@ int main(int argc, char *argv[])
         perror("create listen socket");
         exit(-1);
     }
+    
+#ifdef WIN32
+    {
+        /* avoid errno 10054 on udp socket */
+        int reported = 0;
+        int ret = 0;
+        int status = WSAIoctl(listen_fd, SIO_UDP_CONNRESET, &reported,
+            sizeof(reported), NULL, 0, &ret, NULL, NULL);
+        if (status == SOCKET_ERROR){
+            perror("SIO_UDP_CONNRESET");
+            exit(-1);
+        }
+    }    
+#endif    
     memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
     listen_addr.sin_port = htons(listen_port);
