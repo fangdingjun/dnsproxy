@@ -17,12 +17,12 @@ char *default_servers[] = {
 char *listen_ip = "127.0.0.1";
 
 int listen_port = 53;
-FILE *logfp=NULL;
+FILE *logfp = NULL;
 
 char **servers = default_servers;
 int become_daemon = 0;
 
-char *logfile="dnsproxy.log";
+char *logfile = "dnsproxy.log";
 
 int loglevel = 3;
 
@@ -32,15 +32,15 @@ int loglevel = 3;
 char *blacklist = "iplist.txt";
 char *black_ips = NULL;
 
-struct arg_map arguments[]={
-    {"listen_ip", ARG_STRING, (void**)&listen_ip},
-    {"listen_port",ARG_INT, (void**)&listen_port},
-    {"servers",ARG_STR_ARRARY,(void**)&servers},
-    {"daemon",ARG_INT,(void**)&become_daemon},
-    {"blacklist",ARG_STRING,(void**)&blacklist},
-    {"logfile",ARG_STRING,(void **)&logfile},
-    {"loglevel",ARG_INT,(void **)&loglevel},
-    {NULL,0,NULL}
+struct arg_map arguments[] = {
+    {"listen_ip", ARG_STRING, (void **) &listen_ip},
+    {"listen_port", ARG_INT, (void **) &listen_port},
+    {"servers", ARG_STR_ARRARY, (void **) &servers},
+    {"daemon", ARG_INT, (void **) &become_daemon},
+    {"blacklist", ARG_STRING, (void **) &blacklist},
+    {"logfile", ARG_STRING, (void **) &logfile},
+    {"loglevel", ARG_INT, (void **) &loglevel},
+    {NULL, 0, NULL}
 };
 
 #ifdef USE_EPOLL
@@ -71,8 +71,8 @@ int recv_from_client(struct msg_data *d)
         return 0;
     }
     DBG("recv %d bytes from %s:%d\n", d->msg_len,
-           inet_ntoa(d->client_addr.sin_addr),
-           ntohs(d->client_addr.sin_port));
+        inet_ntoa(d->client_addr.sin_addr),
+        ntohs(d->client_addr.sin_port));
     send_to_server(d);
     return 0;
 }
@@ -154,7 +154,8 @@ int recv_from_server(struct msg_data *d)
         char *ip;
         char *ip_found;
         int found = 0;
-        if(!black_ips) break;
+        if (!black_ips)
+            break;
 
         m = (struct dns_msg *) malloc(sizeof(struct dns_msg));
         if (m == NULL) {
@@ -214,7 +215,7 @@ int send_to_client(struct msg_data *d, char *msg, int msg_len)
     epoll_ctl(epfd, EPOLL_CTL_DEL, d->srv_fd, &ev);
 #endif
     DBG("send to %s:%d\n", inet_ntoa(d->client_addr.sin_addr),
-           htons(d->client_addr.sin_port));
+        htons(d->client_addr.sin_port));
     close(d->srv_fd);
     memset(d, 0, sizeof(struct msg_data));
 
@@ -243,48 +244,50 @@ int main(int argc, char *argv[])
 #else
     printf(")\n");
 #endif
-   
+
 #ifdef WIN32
     int child = 0;
-    for(i=1; i<argc; i++){
-        if(strcmp(argv[i], "child") == 0){
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "child") == 0) {
             child = 1;
         }
     }
-#endif 
+#endif
     parse_cfg("dnsproxy.cfg", arguments);
-    if(blacklist){
+    if (blacklist) {
         get_blackip(blacklist, &black_ips);
     }
 
-    if(logfile){
-        if(strcmp(logfile,"stdout")==0 || strcmp(logfile,"stderr") == 0){
-            logfp=stdout;
-        }else{
+    if (logfile) {
+        if (strcmp(logfile, "stdout") == 0
+            || strcmp(logfile, "stderr") == 0) {
+            logfp = stdout;
+        } else {
             logfp = fopen(logfile, "a");
-            if(logfp == NULL){
+            if (logfp == NULL) {
                 //perror(logfile);
-                fprintf(stderr,"open %s failed\n", logfile);
+                fprintf(stderr, "open %s failed\n", logfile);
             }
         }
     }
-    if (become_daemon){
+    if (become_daemon) {
 #ifdef WIN32
-        if(child == 0){
+        if (child == 0) {
             char buf[1024];
             STARTUPINFO si;
             PROCESS_INFORMATION pi;
             ZeroMemory(&si, sizeof(si));
-            si.cb=sizeof(si);
+            si.cb = sizeof(si);
             ZeroMemory(&pi, sizeof(pi));
             strcpy(buf, argv[0]);
-            for(i=1;i<argc;i++){
+            for (i = 1; i < argc; i++) {
                 strcat(buf, " ");
-                strcat(buf,argv[i]);
+                strcat(buf, argv[i]);
             }
-            strcat(buf," child");
-            if(!CreateProcess(NULL, buf, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)){
-                fprintf(stderr,"create process failed\n");
+            strcat(buf, " child");
+            if (!CreateProcess
+                (NULL, buf, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+                fprintf(stderr, "create process failed\n");
                 exit(-1);
             }
             CloseHandle(pi.hProcess);
@@ -292,7 +295,7 @@ int main(int argc, char *argv[])
             exit(0);
         }
 #else
-        daemon(1,1);
+        daemon(1, 1);
 #endif
         freopen(NULLDEV, "w", stdout);
         freopen(NULLDEV, "w", stderr);
@@ -321,20 +324,19 @@ int main(int argc, char *argv[])
 #endif
         exit(-1);
     }
-    
 #ifdef WIN32
     {
         /* avoid errno 10054 on udp socket */
-        int reported = 0;
+        int reported = 0; 
         DWORD ret = 0;
         int status = WSAIoctl(listen_fd, SIO_UDP_CONNRESET, &reported,
-            sizeof(reported), NULL, 0, &ret, NULL, NULL);
-        if (status == SOCKET_ERROR){
+                              sizeof(reported), NULL, 0, &ret, NULL, NULL);
+        if (status == SOCKET_ERROR) {
             perror("SIO_UDP_CONNRESET");
             exit(-1);
         }
-    }    
-#endif    
+    }
+#endif
     memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
     listen_addr.sin_port = htons(listen_port);
@@ -437,13 +439,13 @@ int main(int argc, char *argv[])
                 }
             }                   /* for */
 #endif
-       }                        /* if */
+        }                       /* if */
 #ifdef USE_EPOLL
-      }                         /* for */
+    }                           /* for */
 #endif
-    }                           /* while */
+}                               /* while */
 
-    return 0;
+return 0;
 }
 
 int free_timeout_client()
@@ -464,5 +466,3 @@ int free_timeout_client()
     }
     return 0;
 }
-
-
