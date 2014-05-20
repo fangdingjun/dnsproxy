@@ -18,7 +18,7 @@ endif()
 
 add_executable(dnsc dnsc.c dnsutil.c)
 
-add_executable(dnsproxy dnsproxy.c dnsutil.c)
+add_executable(dnsproxy dnsproxy.c dnsutil.c parse_cfg.c dnsproxy.h)
 
 if(GLIB_FOUND)
     add_executable(dnsproxy_glib dnsproxy_glib.c dnsutil.c)
@@ -36,7 +36,7 @@ if(WIN32)
     target_link_libraries(dnsc ws2_32)
     target_link_libraries(dnsproxy ws2_32)
 
-    set_target_properties(dnsproxy PROPERTIES LINK_FLAGS "-Wl,-subsystem,windows")
+    #set_target_properties(dnsproxy PROPERTIES LINK_FLAGS "-Wl,-subsystem,windows")
 else()
     add_definitions( -DUSE_EPOLL)
 endif()
