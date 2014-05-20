@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdio.h>
 #ifndef DNS_H
 #define DNS_H
 struct msg_header {
