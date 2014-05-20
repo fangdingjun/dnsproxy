@@ -1,6 +1,6 @@
 #ifndef DNSPROXY_H
 #define DNSPROXY_H
-
+#include <errno.h>
 #include <stdio.h>
 #include <sys/types.h>
 #ifndef WIN32
@@ -29,13 +29,13 @@
 
 #include <time.h>
 
-enum arg_t{
+enum arg_t {
     ARG_INT,
     ARG_STRING,
     ARG_STR_ARRARY
 };
 
-struct arg_map{
+struct arg_map {
     char *name;
     enum arg_t type;
     void **addr;
@@ -87,7 +87,7 @@ struct msg_data {
     } \
 } while(0)
 
-#define DBG(fmt, args...) log(LOG_DEBUG,"DEBUG: "  fmt,  ## args) 
+#define DBG(fmt, args...) log(LOG_DEBUG,"DEBUG: "  fmt,  ## args)
 #define INFO(fmt, args...) log(LOG_INFO,"INFO: "  fmt,  ## args)
 #define WARN(fmt, args...) log(LOG_WARNING,"WARN: "  fmt, ## args)
 #define ERR(fmt, args...) log(LOG_ERROR,"ERROR: "  fmt,  ## args)
