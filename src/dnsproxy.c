@@ -70,7 +70,7 @@ int recv_from_client(struct msg_data *d)
         memset(d, 0, sizeof(struct msg_data));
         return 0;
     }
-    DBG("recv %d bytes from %s:%d\n", d->msg_len,
+    DBG("recv %d bytes from client %s:%d\n", d->msg_len,
         inet_ntoa(d->client_addr.sin_addr),
         ntohs(d->client_addr.sin_port));
     send_to_server(d);
@@ -96,6 +96,8 @@ int send_to_server(struct msg_data *d)
     memset(&saddr, 0, sizeof(saddr));
     saddr.sin_family = AF_INET;
     saddr.sin_port = htons(53);
+    int l;
+    l=sizeof(saddr);
     for (i = 0;; i++) {
         if (servers[i] == NULL) {
             break;
@@ -105,7 +107,7 @@ int send_to_server(struct msg_data *d)
 
         if (sendto
             (d->srv_fd, d->msg_buf, d->msg_len, 0,
-             (struct sockaddr *) &saddr, sizeof(saddr)) < 0) {
+             (struct sockaddr *) &saddr, l) < 0) {
 #ifdef WIN32
             perror("sendto server");
 #else
@@ -136,7 +138,11 @@ int recv_from_server(struct msg_data *d)
 {
     char buf[512];
     int msg_len;
-    msg_len = recvfrom(d->srv_fd, buf, 512, 0, NULL, 0);
+    struct sockaddr_in saddr;
+    socklen_t l;
+    memset(&saddr, 0, sizeof(saddr));
+    l=sizeof(saddr);
+    msg_len = recvfrom(d->srv_fd, buf, 512, 0, (struct sockaddr*) &saddr, &l);
     if (msg_len < 0) {
         close(d->srv_fd);
         memset(d, 0, sizeof(struct msg_data));
@@ -146,6 +152,11 @@ int recv_from_server(struct msg_data *d)
         memset(d, 0, sizeof(struct msg_data));
         return 0;
     }
+
+    DBG("recv %d bytes from server %s:%d\n", msg_len,
+            inet_ntoa(saddr.sin_addr),
+            htons(saddr.sin_port)
+            );
 
     /* parse the dns message and check the black list */
     do {
@@ -187,7 +198,6 @@ int recv_from_server(struct msg_data *d)
             return -1;
         }
     } while (0);
-    DBG("recv %d bytes from server\n", msg_len);
     send_to_client(d, buf, msg_len);
     return 0;
 }
@@ -214,7 +224,7 @@ int send_to_client(struct msg_data *d, char *msg, int msg_len)
     ev.events = EPOLLIN;
     epoll_ctl(epfd, EPOLL_CTL_DEL, d->srv_fd, &ev);
 #endif
-    DBG("send to %s:%d\n", inet_ntoa(d->client_addr.sin_addr),
+    DBG("send to %s:%d success\n", inet_ntoa(d->client_addr.sin_addr),
         htons(d->client_addr.sin_port));
     close(d->srv_fd);
     memset(d, 0, sizeof(struct msg_data));
@@ -286,7 +296,7 @@ int main(int argc, char *argv[])
             }
             strcat(buf, " child");
             if (!CreateProcess
-                (NULL, buf, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+                (NULL, buf, NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi)) {
                 fprintf(stderr, "create process failed\n");
                 exit(-1);
             }
@@ -445,8 +455,8 @@ int main(int argc, char *argv[])
 #endif
 }                               /* while */
 
-return 0;
-}
+    return 0;
+} /* main */
 
 int free_timeout_client()
 {
@@ -459,6 +469,7 @@ int free_timeout_client()
         }
         if ((now - msg[i].last_active) > 2) {
             if (msg[i].srv_fd) {
+                DBG("timeout, close fd %d\n", msg[i].srv_fd);
                 close(msg[i].srv_fd);
             }
             memset(&msg[i], 0, sizeof(struct msg_data));
