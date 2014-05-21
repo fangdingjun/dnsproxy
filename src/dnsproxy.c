@@ -397,15 +397,6 @@ int main(int argc, char *argv[])
     printf(")\n");
 #endif
 
-#ifdef WIN32
-    int child = 0;
-    for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "child") == 0) {
-            child = 1;
-        }
-    }
-#endif
-
     /* parse cmdline */
     parse_cmdline(argc, argv, 1);
 
@@ -446,29 +437,7 @@ int main(int argc, char *argv[])
     if (become_daemon) {
         INFO("run in backgroud...\n");
 #ifdef WIN32
-        /* windows has no fork system call, we use CreateProcess instead */
-        if (child == 0) {
-            char buf[1024];
-            STARTUPINFO si;
-            PROCESS_INFORMATION pi;
-            ZeroMemory(&si, sizeof(si));
-            si.cb = sizeof(si);
-            ZeroMemory(&pi, sizeof(pi));
-            strcpy(buf, argv[0]);
-            for (i = 1; i < argc; i++) {
-                strcat(buf, " ");
-                strcat(buf, argv[i]);
-            }
-            strcat(buf, " child");
-            if (!CreateProcess
-                (NULL, buf, NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi)) {
-                fprintf(stderr, "create process failed\n");
-                exit(-1);
-            }
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-            exit(0);
-        }
+        FreeConsole();
 #else
         daemon(1, 1);
 #endif
