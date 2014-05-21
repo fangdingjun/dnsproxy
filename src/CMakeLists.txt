@@ -26,6 +26,7 @@ if(GLIB_FOUND)
 endif()
 
 
+add_definitions( -DVERSION="\\"0.1.1\\"")
 if(WIN32)
     add_definitions( -DUSE_SELECT)
 
