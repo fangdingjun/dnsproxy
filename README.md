@@ -20,39 +20,25 @@ there are two versions:
 
  dnsproxy.c is a pure C version, it does not depend on the other libraries
  
- dnsproxy_glib is a glib version, need glib2
-
-
-to compile the dnsproxy_glib, you need
-
-    glib2 runtime files
-    glib2 development files
-    
-
-on redhat, you can install glib2 by
-
-    sudo yum install glib2 glib2-devel
-
-on windows, you can download glib2 from
-  <link>http://www.gtk.org/download/win32.php</link>
-
- 
 
 ##compile
-on Linux
+
+###Linux
+on Linux, you can compile it with cmake or GNU automake
+
+to use GNU automake, run command:
 
     ./gen.sh
      make
 
-on Windows, install MinGW/MSYS and cmake, compile with MSYS
+to use cmake, run command:
 
-    cd src
-    cmake -G "MSYS makefiles"
+    cmake .
     make
-    
-or compile with MinGW
+ 
+###Windows
+on Windows, you comilie it to mingw with cmake, MSVC is not support, run follow command to compile:
 
-    cd src
     cmake -G "MinGW Makefiles"
     mingw32-make
     
@@ -62,8 +48,14 @@ or compile with MinGW
 
 To run dnsproxy server, you need superuser privilege to listen on port 53
 
-    sudo ./dnsproxy 
+you can simple run
 
+    sudo ./dnsproxy
+
+or sudo ./dnsproxy -c dnsproxy.cfg to special a configure file
+
+use ./dnsproxy -h to show more options
+    
 test the server with this command on linux
 
     dig @127.0.0.1 twitter.com
@@ -73,6 +65,19 @@ or this command on windows
             
 you can set your system dns to 127.0.0.1
 
+###configure
+the default configure is dnsproxy.cfg at current director, or you can use -c to special a other configure file
+
+this is a sample configure file
+
+    listen_ip = 127.0.0.1
+    listen_port = 53
+    servers = 192.168.1.1,8.8.8.8,202.180.160.1,202.45.84.59,202.45.84.67
+    blacklist= iplist.txt
+    daemon = 1
+    logfile = dnsproxy.log
+    loglevel = 3
+    
 ###dnsclient
 
 there is a dns test client, named dnsc
