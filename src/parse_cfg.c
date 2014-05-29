@@ -1,3 +1,15 @@
+#============================================
+# Filename:
+#    parse_cfg.c
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   this file contain the functions to parse config file
+#   and  assign the result to variable by a structure
+#============================================
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

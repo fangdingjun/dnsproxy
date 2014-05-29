@@ -1,3 +1,16 @@
+#============================================
+# Filename:
+#    dns.h
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   headers file, define some structure 
+#   and functions for dns message parse
+#============================================
+
+
 #include <stdint.h>
 #include <stdio.h>
 #ifndef DNS_H

@@ -1,3 +1,18 @@
+#============================================
+# Filename:
+#    dnsproxy.c
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   this is dns proxy server, which forward the client request
+#   to more than one upstream dns servers and get the fastest
+#   response, than discard the other response
+#   there is also has a black list, you can discard the response which
+#   contain the ip you don't wanted by the black list
+#============================================
+
 
 #include "dns.h"
 #include "dnsproxy.h"
@@ -37,7 +52,7 @@ char *logfile = "dnsproxy.log";
 /* default log level */
 int loglevel = 3;
 
-/* the ip lists that china GFW used for DNS cache pollution 
+/* the ip lists that china GFW used for DNS cache pollution
 *  http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93
 */
 
@@ -252,7 +267,7 @@ int recv_from_server(struct msg_data *d)
 /* answer the client */
 int send_to_client(struct msg_data *d, char *msg, int msg_len)
 {
-    
+
     /* send */
     if (sendto
         (d->listen_fd, msg, msg_len, 0,
@@ -275,14 +290,14 @@ int send_to_client(struct msg_data *d, char *msg, int msg_len)
     struct epoll_event ev;
     ev.data.ptr = d;
     ev.events = EPOLLIN;
-    
+
     /* remove from epoll watch list */
     epoll_ctl(epfd, EPOLL_CTL_DEL, d->srv_fd, &ev);
 #endif
-    
+
     DBG("send to %s:%d success\n", inet_ntoa(d->client_addr.sin_addr),
         htons(d->client_addr.sin_port));
-    
+
     close(d->srv_fd);
     memset(d, 0, sizeof(struct msg_data));
 
@@ -479,7 +494,7 @@ int main(int argc, char *argv[])
 #ifdef WIN32
     {
         /* avoid errno 10054 on udp socket */
-        int reported = 0; 
+        int reported = 0;
         DWORD ret = 0;
         int status = WSAIoctl(listen_fd, SIO_UDP_CONNRESET, &reported,
                               sizeof(reported), NULL, 0, &ret, NULL, NULL);

@@ -1,3 +1,18 @@
+#============================================
+# Filename:
+#    dnsc.c
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   this a dns client program, like dig
+# Usage:
+#   dnsc [-t type] [-s dnsserver] domain
+#============================================
+
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

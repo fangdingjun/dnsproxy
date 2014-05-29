@@ -1,3 +1,15 @@
+#============================================
+# Filename:
+#    dnsutil.c
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   this file contain some functions to parse dns message
+#============================================
+
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>

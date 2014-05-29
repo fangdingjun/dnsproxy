@@ -1,3 +1,15 @@
+#============================================
+# Filename:
+#    dnsproxy.h
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   header files used by dnsproxy.c
+#============================================
+
+
 #ifndef DNSPROXY_H
 #define DNSPROXY_H
 #include <errno.h>
