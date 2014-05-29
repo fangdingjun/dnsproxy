@@ -1,0 +1,45 @@
+#!python
+
+import sys
+import os
+
+# env
+if sys.platform == "win32":
+    env=Environment(tools=["mingw"], ENV=os.environ,
+            LINKFLAGS="-Wall -O2", CCFLAGS="-Wall -O2")
+else:
+    env=Environment(ENV=os.environ, 
+            LINKFLAGS="-Wall -O2", CCFLAGS="-Wall -O2")
+
+env.MergeFlags(env.ParseFlags("-Wall -O2 -g" ))
+
+# check compiler
+if sys.platform == "win32":
+    find_gcc = 0
+    for p in os.environ["PATH"].split(";"):
+        cc=os.path.join(p,"gcc.exe")
+        if os.path.exists(cc):
+            env["CC"] = cc
+            find_gcc = 1
+            break
+    if not find_gcc:
+        raise OSError("gcc not found")
+
+    env.MergeFlags(env.ParseFlags("-DUSE_SELECT -lws2_32"))
+else:
+    find_compiler = 0
+    for p in os.environ["PATH"].split(":"):
+        for ccl in ["clang", "gcc", "cc"]:
+            cc=os.path.join(p, ccl)
+            if os.path.join(cc):
+                env["CC"] = cc
+                find_compiler = 1
+                break
+    if not find_compiler:
+        raise OSError("no compiler found")
+
+    env.MergeFLags(env.ParseFlags("-DUSE_EPOLL"))
+
+# bin
+env.Program("dnsc", ["dnsc.c","dnsutil.c"])
+env.Program("dnsproxy", ["dnsutil.c","dnsproxy.c","parse_cfg.c"])
