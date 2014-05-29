@@ -1,3 +1,4 @@
+/*
 #============================================
 # Filename:
 #    dnsproxy.h
@@ -8,7 +9,7 @@
 # Description:
 #   header files used by dnsproxy.c
 #============================================
-
+*/
 
 #ifndef DNSPROXY_H
 #define DNSPROXY_H

@@ -1,3 +1,4 @@
+/*
 #============================================
 # Filename:
 #    dnsproxy.c
@@ -12,7 +13,7 @@
 #   there is also has a black list, you can discard the response which
 #   contain the ip you don't wanted by the black list
 #============================================
-
+*/
 
 #include "dns.h"
 #include "dnsproxy.h"

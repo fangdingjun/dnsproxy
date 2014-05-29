@@ -1,3 +1,4 @@
+/*
 #============================================
 # Filename:
 #    parse_cfg.c
@@ -9,6 +10,7 @@
 #   this file contain the functions to parse config file
 #   and  assign the result to variable by a structure
 #============================================
+*/
 
 #include <stdio.h>
 #include <stdlib.h>

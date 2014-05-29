@@ -1,3 +1,4 @@
+/*
 #============================================
 # Filename:
 #    dns.h
@@ -9,7 +10,7 @@
 #   headers file, define some structure 
 #   and functions for dns message parse
 #============================================
-
+*/
 
 #include <stdint.h>
 #include <stdio.h>

@@ -1,3 +1,4 @@
+/*
 #============================================
 # Filename:
 #    dnsutil.c
@@ -8,7 +9,7 @@
 # Description:
 #   this file contain some functions to parse dns message
 #============================================
-
+*/
 
 #include <stdio.h>
 #include <string.h>
