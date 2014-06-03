@@ -2,6 +2,9 @@
 
 #project(dnsproxy C)
 
+set(LIBRARY_OUTPUT_PATH ${dnsproxy_SOURCE_DIR}/src)
+set(EXECUTABLE_OUTPUT_PATH ${dnsproxy_SOURCE_DIR}/src)
+
 set(CMAKE_C_FLAGS "-Wall -O2")
 #set(CMAKE_CXX_FLAGS "-Wall -O2")
 
