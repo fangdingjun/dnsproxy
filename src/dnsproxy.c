@@ -240,8 +240,9 @@ int recv_from_server(struct msg_data *d)
         parse_msg(m);
 
         /* check */
-        for (rr = m->an; rr; rr = rr->next) {
+        for (rr = m->an; rr; rr = rr->next) {            
             if (rr->type == RR_A) {
+                DBG("%s IN A %s\n", rr->name, (char *)rr->rdata);
                 ip = rr->rdata;
                 ip_found = strstr(black_ips, ip);
                 if (ip_found != NULL) { /* ip is in blacklist */
@@ -249,6 +250,8 @@ int recv_from_server(struct msg_data *d)
                     WARN("found bad ip %s, continue.\n", ip);
                     break;
                 }
+            }else if(rr->type == RR_AAAA){
+               DBG("%s IN AAAA %s\n", rr->name, (char *)rr->rdata); 
             }
         }
 
