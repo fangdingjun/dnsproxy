@@ -443,7 +443,7 @@ int main(int argc, char *argv[])
         /* read black list */
         get_blackip(blacklist, &black_ips);
     }
-    db = init_dns_cache("/tmp/dns.db", cache_table);
+    db = init_dns_cache("cache.db", cache_table);
 
     INFO("listen to %s:%d\n", listen_ip, listen_port);
 
