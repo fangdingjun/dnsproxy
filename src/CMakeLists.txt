@@ -12,13 +12,38 @@ add_definitions( -DVERSION="\\"0.1.1\\"")
 
 if(WIN32)
     add_definitions( -DUSE_SELECT)
-    link_libraries(ws2_32)
 else()
     add_definitions( -DUSE_EPOLL)
 endif()
 
+include_directories( ${dnsproxy_SOURCE_DIR}/third-part/sqlite/)
+
 add_executable(dnsc dnsc.c dnsutil.c)
 
-add_executable(dnsproxy dnsproxy.c dnsutil.c parse_cfg.c dnsproxy.h)
+add_executable(dnsproxy dnsproxy.c dnsutil.c parse_cfg.c dnsproxy.h cache.c
+    ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.c
+    ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.h
+    )
 
+if(WIN32)
+    target_link_libraries(dnsc ws2_32)
+    target_link_libraries(dnsproxy ws2_32)
+else()
+    target_link_libraries(dnsproxy dl pthread)
+endif()
+
+add_definitions("-DHAVE_READLINE=1")
+
+add_executable(sqlite
+    ${dnsproxy_SOURCE_DIR}/third-part/sqlite/shell.c
+    ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.c
+    ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.h
+    ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3ext.h
+    )
+
+if(WIN32)
+    target_link_libraries(sqlite readline)
+else()
+    target_link_libraries(sqlite dl pthread readline)
+endif()
 
