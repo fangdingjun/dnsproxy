@@ -177,7 +177,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
     for (i = 0; i < ncount; i++) {
         if (i == 0) {
             rr_head = (struct dns_rr *) malloc(sizeof(struct dns_rr));
-            if(!rr_head){
+            if (!rr_head) {
                 fprintf(stderr, "out of memory\n");
                 *res = NULL;
                 return -1;
@@ -186,7 +186,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
             rr_cur = rr_head;
         } else {
             rr_cur->next = (struct dns_rr *) malloc(sizeof(struct dns_rr));
-            if(rr_cur->next == NULL){
+            if (rr_cur->next == NULL) {
                 fprintf(stderr, "out of memory\n");
                 *res = NULL;
                 free_rr(rr_head);
@@ -271,7 +271,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
         } else if (rr_cur->type == RR_MX) {
             struct mx_rdata *mx;
             mx = malloc(sizeof(struct mx_rdata));
-            if( mx == NULL){
+            if (mx == NULL) {
                 fprintf(stderr, "out of memory\n");
                 *res = NULL;
                 free_rr(rr_head);
@@ -285,7 +285,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
         } else if (rr_cur->type == RR_TXT) {
             //rr_cur->rdata=parse_rname(start,p-start,NULL,rr_cur->rdlength);
             rr_cur->rdata = malloc(rr_cur->rdlength);
-            if(rr_cur->rdata == NULL){
+            if (rr_cur->rdata == NULL) {
                 fprintf(stderr, "out of memory\n");
                 *res = NULL;
                 free_rr(rr_head);
@@ -295,7 +295,7 @@ parse_rr(char *start, size_t offset, size_t ncount,
 
         } else {
             rr_cur->rdata = malloc(rr_cur->rdlength);
-            if(rr_cur->rdata == NULL){
+            if (rr_cur->rdata == NULL) {
                 fprintf(stderr, "out of memory\n");
                 *res = NULL;
                 free_rr(rr_head);
@@ -437,7 +437,7 @@ int bind_request(char *domain, uint16_t qtype, char **res)
     p1 += 2;
     hdr_len = p1 - buf;
     *res = malloc(hdr_len);
-    if(! *res){
+    if (!*res) {
         fprintf(stderr, "out of memory\n");
         return -1;
     }
@@ -456,7 +456,7 @@ size_t parse_qd(char *start, size_t offset, size_t max,
         return 0;
     }
     r = malloc(sizeof(struct dns_rr));
-    if (!r){
+    if (!r) {
         fprintf(stderr, "out of memory\n");
         *res = NULL;
         return 0;
@@ -530,4 +530,30 @@ int parse_msg(struct dns_msg *m)
     }
     //printf("end\n");
     return 0;
+}
+
+int str2label(const char *src, char *dst)
+{
+    char *p1, *p2;
+    char *p;
+    int len;
+    p = src;
+    p1 = src;
+    p2 = dst;
+    while (1) {
+        while (*p1 != '.' && *p1 != '\0')
+            p1++;
+        if (*p1 == '\0')
+            break;
+        len = p1 - p;
+        *p2 = len;
+        p2++;
+        memcpy(p2, p, len);
+        p2 += len;
+        p1++;
+        p = p1;
+    }
+    *p2 = '\0';
+    p2++;
+    return (p2 - dst);
 }
