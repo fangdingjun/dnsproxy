@@ -219,7 +219,8 @@ parse_rr(char *start, size_t offset, size_t ncount,
         } else if (rr_cur->type == RR_A) {
             char d[20];
 #ifdef WIN32                    /* win32 */
-            DWORD buflen = sizeof(d), addrlen;
+            DWORD buflen = sizeof(d);
+            DWORD addrlen;
             struct sockaddr_storage sa;
             struct sockaddr_in *sin = (struct sockaddr_in *) &sa;
             memset(&sa, 0, sizeof(sa));
@@ -254,7 +255,8 @@ parse_rr(char *start, size_t offset, size_t ncount,
                 rr_cur->rdata = NULL;
             }
 #else                           /* win32 */
-            DWORD buflen = sizeof(dst), addrlen;
+            DWORD buflen = sizeof(dst);
+            DWORD addrlen;
             struct sockaddr_storage sa;
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &sa;
             memset(&sa, 0, sizeof(sa));

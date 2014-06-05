@@ -782,12 +782,34 @@ int process_cache(struct msg_data *d)
         if (r1->type == RR_A) {
             *((unsigned short *) pos) = htons(4);
             pos += 2;
+#ifdef WIN32
+            struct sockaddr_storage sa;
+            struct sockaddr_in *sin=(struct sockaddr_in *)&sa;
+            memset(&sa, 0, sizeof(sa));
+            sa.ss_family=AF_INET;
+            int addlen = sizeof(*sin);
+
+            WSAStringToAddress(r1->rdata, AF_INET, NULL, (LPSOCKADDR) sin, &addlen);
+            memcpy(pos, (void *)&sin->sin_addr, 4);
+
+#else
             inet_pton(AF_INET, r1->rdata, pos);
+#endif
             pos += 4;
         } else if (r1->type == RR_AAAA) {
             *((unsigned short *) pos) = htons(16);
             pos += 2;
+#ifdef WIN32
+            struct sockaddr_storage sa;
+            struct sockaddr_in6 *sin6=(struct sockaddr_in6 *)&sa;
+            int addlen=sizeof(*sin6);
+            memset(&sa, 0, sizeof(sa));
+            sa.ss_family = AF_INET6;
+            WSAStringToAddress(r1->rdata, AF_INET6, NULL, (LPSOCKADDR) sin6, &addlen);
+            memcpy(pos, (void *)&sin6->sin6_addr, 16);
+#else
             inet_pton(AF_INET6, r1->rdata, pos);
+#endif
             pos += 16;
         } else if (r1->type == RR_CNAME) {
             offset = str2label(r1->rdata, label);
