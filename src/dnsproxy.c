@@ -17,8 +17,13 @@
 
 #include "dns.h"
 #include "dnsproxy.h"
+#include "cache.h"
 
 #define MAX_QUEUE 100
+
+sqlite3 *init_dns_cache(char *dbname, char *tblname);
+int process_cache(struct msg_data *d);
+int str2label(const char *, char *);
 
 /* default remote dns servers */
 char *default_servers[] = {
@@ -63,6 +68,9 @@ char *blacklist = "iplist.txt";
 /* pointer to black list */
 char *black_ips = NULL;
 
+/* sqlite connection */
+sqlite3 *db = NULL;
+char *cache_table = "dns";
 /* map pointer to config file option name*/
 struct arg_map arguments[] = {
     {"listen_ip", ARG_STRING, (void **) &listen_ip},
@@ -110,6 +118,9 @@ int recv_from_client(struct msg_data *d)
     DBG("recv %d bytes from client %s:%d\n", d->msg_len,
         inet_ntoa(d->client_addr.sin_addr),
         ntohs(d->client_addr.sin_port));
+    if (process_cache(d) == 0) {
+        return 0;
+    }
     send_to_server(d);
     return 0;
 }
@@ -135,7 +146,7 @@ int send_to_server(struct msg_data *d)
     saddr.sin_family = AF_INET;
     saddr.sin_port = htons(53);
     int l;
-    l=sizeof(saddr);
+    l = sizeof(saddr);
     for (i = 0;; i++) {
         if (servers[i] == NULL) {
             break;
@@ -157,8 +168,7 @@ int send_to_server(struct msg_data *d)
             return -1;
         }
         DBG("send to %s:%d success\n",
-                inet_ntoa(saddr.sin_addr),
-                htons(saddr.sin_port));
+            inet_ntoa(saddr.sin_addr), htons(saddr.sin_port));
     }
 #ifdef USE_EPOLL
     struct epoll_event ev;
@@ -188,10 +198,11 @@ int recv_from_server(struct msg_data *d)
     struct sockaddr_in saddr;
     socklen_t l;
     memset(&saddr, 0, sizeof(saddr));
-    l=sizeof(saddr);
+    l = sizeof(saddr);
 
     /* read */
-    msg_len = recvfrom(d->srv_fd, buf, 512, 0, (struct sockaddr*) &saddr, &l);
+    msg_len =
+        recvfrom(d->srv_fd, buf, 512, 0, (struct sockaddr *) &saddr, &l);
     if (msg_len < 0) {
         close(d->srv_fd);
         memset(d, 0, sizeof(struct msg_data));
@@ -204,9 +215,8 @@ int recv_from_server(struct msg_data *d)
     }
 
     DBG("recv %d bytes from server %s:%d\n", msg_len,
-            inet_ntoa(saddr.sin_addr),
-            htons(saddr.sin_port)
-            );
+        inet_ntoa(saddr.sin_addr), htons(saddr.sin_port)
+        );
 
     /* parse the dns message and check the black list */
     do {
@@ -240,9 +250,9 @@ int recv_from_server(struct msg_data *d)
         parse_msg(m);
 
         /* check */
-        for (rr = m->an; rr; rr = rr->next) {            
+        for (rr = m->an; rr; rr = rr->next) {
             if (rr->type == RR_A) {
-                DBG("%s IN A %s\n", rr->name, (char *)rr->rdata);
+                DBG("%s IN A %s\n", rr->name, (char *) rr->rdata);
                 ip = rr->rdata;
                 ip_found = strstr(black_ips, ip);
                 if (ip_found != NULL) { /* ip is in blacklist */
@@ -250,9 +260,13 @@ int recv_from_server(struct msg_data *d)
                     WARN("found bad ip %s, continue.\n", ip);
                     break;
                 }
-            }else if(rr->type == RR_AAAA){
-               DBG("%s IN AAAA %s\n", rr->name, (char *)rr->rdata); 
+            } else if (rr->type == RR_AAAA) {
+                DBG("%s IN AAAA %s\n", rr->name, (char *) rr->rdata);
             }
+        }
+
+        if (!found) {
+            cache_store(db, cache_table, m->an);
         }
 
         /* free memory */
@@ -397,7 +411,7 @@ int main(int argc, char *argv[])
     int j;
     struct sockaddr_in listen_addr;
 
-    logfp=stdout;
+    logfp = stdout;
 
     printf("dnsproxy (");
 #ifdef WIN32
@@ -422,17 +436,18 @@ int main(int argc, char *argv[])
     /* parse config file */
     parse_cfg(configfile, arguments);
 
-    /* parse cmdline again, the command line option has high priority*/
+    /* parse cmdline again, the command line option has high priority */
     parse_cmdline(argc, argv, 2);
 
     if (blacklist) {
         /* read black list */
         get_blackip(blacklist, &black_ips);
     }
+    db = init_dns_cache("/tmp/dns.db", cache_table);
 
     INFO("listen to %s:%d\n", listen_ip, listen_port);
 
-    for (i=0; servers[i] != NULL; i++){
+    for (i = 0; servers[i] != NULL; i++) {
         INFO("add server %s to remote list\n", servers[i]);
     }
 
@@ -614,7 +629,8 @@ int main(int argc, char *argv[])
             /* process request */
             recv_from_client(&msg[j]);
 
-        } else {                /* server response */
+        } else {
+            /* server response */
 #ifdef USE_EPOLL
             recv_from_server(d);
 #else
@@ -624,19 +640,24 @@ int main(int argc, char *argv[])
                     continue;
                 }
                 if (FD_ISSET(msg[i].fd, &rfds)) {
-                    /* process server response */
+    /* process server response */
                     recv_from_server(&msg[i]);
                 }
-            }   /* for */
+                /* for */
+            }
 #endif
-        }    /* if */
+            /* if */
+        }
 #ifdef USE_EPOLL
-    }    /* for */
+        /* for */
+    }
 #endif
-    }    /* while */
+    /* while */
+}
 
-    return 0;
-} /* main */
+return 0;
+/* main */
+}
 
 int free_timeout_client()
 {
@@ -657,5 +678,142 @@ int free_timeout_client()
             memset(&msg[i], 0, sizeof(struct msg_data));
         }
     }
+    delete_expired(db, cache_table);
     return 0;
+}
+
+sqlite3 *init_dns_cache(char *dbname, char *tblname)
+{
+    sqlite3 *dbc;
+    if (dbname == NULL || tblname == NULL) {
+        WARN("dbname or table name is NULL\n");
+        return NULL;
+    }
+
+    dbc = open_db(dbname);
+    if (dbc == NULL) {
+        return NULL;
+    }
+    init_cache(dbc, 12 * 1024 * 1024);
+    if (create_cache_table(dbc, tblname) != 0) {
+        WARN("create table %s failed\n", tblname);
+    }
+    return dbc;
+}
+
+int process_cache(struct msg_data *d)
+{
+    struct dns_msg *m;
+    struct dns_rr *r;
+    struct dns_rr *r1;
+    char buf[512];
+    struct msg_header *h;
+    int ret = 0;
+    size_t offset;
+    int ancount = 0;
+    char *pos;
+    unsigned short flags = 0;
+    char label[100];
+
+    if (db == NULL) {
+        return -1;
+    }
+    m = malloc(sizeof(struct dns_msg));
+    memset(m, 0, sizeof(struct dns_msg));
+    m->buf = malloc(d->msg_len);
+    memcpy(m->buf, d->msg_buf, d->msg_len);
+    m->msg_len = d->msg_len;
+    parse_msg(m);
+    if (m->qd->name == NULL) {
+        ret = -1;
+        goto err1;
+    }
+    r = cache_fetch(db, cache_table, m->qd->name, m->qd->type);
+    if (r == NULL) {
+        ret = -1;
+        goto err1;
+    }
+    for (r1 = r; r1 != NULL; r1 = r1->next) {
+        ancount++;
+    }
+    memcpy(buf, d->msg_buf, 12);
+    h = (struct msg_header *) buf;
+    h->qdcount = htons(1);
+    h->ancount = htons(ancount);
+    h->nscount = 0;
+    h->arcount = 0;
+
+    flags = 0;
+
+    char *p1;
+    p1 = (char *) &flags;
+    p1[0] |= ((1 << 7) | 0x1);
+    p1[1] |= (1 << 7);
+
+    h->flags = flags;
+    //DBG("flags: 0x%04x\n", flags);
+    pos = buf + 12;
+    offset = str2label(m->qd->name, label);
+    memcpy(pos, label, offset);
+    //offset = set_qname(pos,m->qd->name);
+    pos += offset;
+    *((unsigned short *) pos) = htons(m->qd->type);
+    pos += 2;
+    *((unsigned short *) pos) = htons(m->qd->cls);
+    pos += 2;
+    char *lbl_p;
+    for (r1 = r; r1 != NULL; r1 = r1->next) {
+        offset = str2label(r1->name, label);
+        if ((lbl_p = strstr(buf, label)) != NULL) {
+            int f = lbl_p - buf;
+            f |= (0xc0 << 8);
+            *((unsigned short *) pos) = htons(f);
+            pos += 2;
+        } else {
+            memcpy(pos, label, offset);
+            pos += offset;
+        }
+        *((unsigned short *) pos) = htons(r1->type);
+        pos += 2;
+        *((unsigned short *) pos) = htons(r1->cls);
+        pos += 2;
+        *((unsigned int *) pos) = htonl(r1->ttl);
+        pos += 4;
+        if (r1->type == RR_A) {
+            *((unsigned short *) pos) = htons(4);
+            pos += 2;
+            inet_pton(AF_INET, r1->rdata, pos);
+            pos += 4;
+        } else if (r1->type == RR_AAAA) {
+            *((unsigned short *) pos) = htons(16);
+            pos += 2;
+            inet_pton(AF_INET6, r1->rdata, pos);
+            pos += 16;
+        } else if (r1->type == RR_CNAME) {
+            offset = str2label(r1->rdata, label);
+            *((unsigned short *) pos) = htons(offset);
+            pos += 2;
+            memcpy(pos, label, offset);
+            pos += offset;
+        } else {
+            ERR("unknown type\n");
+        }
+    }
+    if (sendto
+        (d->listen_fd, buf, pos - buf, 0,
+         (struct sockaddr *) &d->client_addr,
+         sizeof(struct sockaddr_in)) < 0) {
+        perror("send to");
+        ret = -1;
+        goto err2;
+    }
+    ret = 0;
+    memset(d, 0, sizeof(struct msg_data));
+
+  err2:
+    free_rr(r);
+
+  err1:
+    free_dns_msg(m);
+    return ret;
 }
