@@ -1,7 +1,7 @@
 dnsutil
 =======
 
-this is a dns proxy server writen by C
+this is a dns proxy server written by C
 
 the server have some features:
   1. speedup the dns query
@@ -16,9 +16,8 @@ for DNS cache pollution, refer to
 
 ##requirement
 
-there are two versions:
 
- dnsproxy.c is a pure C version, it does not depend on the other libraries
+ dnsproxy does not depend on the other libraries
  
 
 ##compile
