@@ -18,6 +18,7 @@
 #include "dns.h"
 #include "dnsproxy.h"
 #include "cache.h"
+#include <stdlib.h>
 
 #define MAX_QUEUE 100
 
@@ -71,6 +72,8 @@ char *black_ips = NULL;
 /* sqlite connection */
 sqlite3 *db = NULL;
 char *cache_table = "dns";
+char *dbname = ":memory:";
+
 /* map pointer to config file option name*/
 struct arg_map arguments[] = {
     {"listen_ip", ARG_STRING, (void **) &listen_ip},
@@ -118,9 +121,15 @@ int recv_from_client(struct msg_data *d)
     DBG("recv %d bytes from client %s:%d\n", d->msg_len,
         inet_ntoa(d->client_addr.sin_addr),
         ntohs(d->client_addr.sin_port));
+        
+    /* lookup for cache */    
+    
     if (process_cache(d) == 0) {
         return 0;
     }
+    
+    
+    /* no cache, query upstream server */
     send_to_server(d);
     return 0;
 }
@@ -264,10 +273,11 @@ int recv_from_server(struct msg_data *d)
                 DBG("%s IN AAAA %s\n", rr->name, (char *) rr->rdata);
             }
         }
-
+        
         if (!found) {
             cache_store(db, cache_table, m->an);
         }
+        
 
         /* free memory */
         free_dns_msg(m);
@@ -443,7 +453,7 @@ int main(int argc, char *argv[])
         /* read black list */
         get_blackip(blacklist, &black_ips);
     }
-    db = init_dns_cache("cache.db", cache_table);
+    db = init_dns_cache(dbname, cache_table);
 
     INFO("listen to %s:%d\n", listen_ip, listen_port);
 
@@ -456,6 +466,9 @@ int main(int argc, char *argv[])
     INFO("loglevel: %d\n", loglevel);
     INFO("daemon: %d\n", become_daemon);
 
+    /* init random seed */
+    srand(time(NULL));
+    
     if (logfile) {
         if (strcmp(logfile, "stdout") == 0
             || strcmp(logfile, "stderr") == 0) {
@@ -640,22 +653,22 @@ int main(int argc, char *argv[])
                     continue;
                 }
                 if (FD_ISSET(msg[i].fd, &rfds)) {
-    /* process server response */
+                    /* process server response */
                     recv_from_server(&msg[i]);
                 }
-                /* for */
+          /* for */
             }
 #endif
-            /* if */
+       /* if */
         }
 #ifdef USE_EPOLL
         /* for */
-    }
+        }
 #endif
     /* while */
-}
+    }
 
-return 0;
+    return 0;
 /* main */
 }
 
@@ -679,6 +692,7 @@ int free_timeout_client()
         }
     }
     delete_expired(db, cache_table);
+    //DBG("delete expired cache success.\n");
     return 0;
 }
 
@@ -712,19 +726,24 @@ int process_cache(struct msg_data *d)
     size_t offset;
     int ancount = 0;
     char *pos;
-    unsigned short flags = 0;
+    unsigned short flags;
     char label[100];
-
+    char *p1;
+    char *lbl_p;
+    
     if (db == NULL) {
         return -1;
     }
+    
     m = malloc(sizeof(struct dns_msg));
     memset(m, 0, sizeof(struct dns_msg));
     m->buf = malloc(d->msg_len);
     memcpy(m->buf, d->msg_buf, d->msg_len);
     m->msg_len = d->msg_len;
+    
     parse_msg(m);
-    if (m->qd->name == NULL) {
+    
+    if (m->qd == NULL || m->qd->name == NULL) {
         ret = -1;
         goto err1;
     }
@@ -745,12 +764,12 @@ int process_cache(struct msg_data *d)
 
     flags = 0;
 
-    char *p1;
     p1 = (char *) &flags;
-    p1[0] |= ((1 << 7) | 0x1);
-    p1[1] |= (1 << 7);
+    p1[0] |= ((1 << 7) | 0x1); /* rq rd */
+    p1[1] |= (1 << 7);  /* ra */
 
     h->flags = flags;
+    
     //DBG("flags: 0x%04x\n", flags);
     pos = buf + 12;
     offset = str2label(m->qd->name, label);
@@ -761,8 +780,22 @@ int process_cache(struct msg_data *d)
     pos += 2;
     *((unsigned short *) pos) = htons(m->qd->cls);
     pos += 2;
-    char *lbl_p;
-    for (r1 = r; r1 != NULL; r1 = r1->next) {
+    
+    int i;
+    struct dns_rr *first;
+    struct dns_rr *cur;
+    int rand_start = rand() % ancount;
+    cur = first = r;
+    for (i=0; i< rand_start; i++){
+        cur = cur->next;
+    }
+    
+    r1 = cur;
+    while(1) {    
+        if (r1 == NULL){
+            ERR("first record is NULL\n");
+            break;
+        }
         offset = str2label(r1->name, label);
         if ((lbl_p = strstr(buf, label)) != NULL) {
             int f = lbl_p - buf;
@@ -819,16 +852,34 @@ int process_cache(struct msg_data *d)
             pos += offset;
         } else {
             ERR("unknown type\n");
+            ret = -1;
+            goto err2;
         }
+        r1 = r1->next;
+        if ( r1 == NULL){
+            r1 = first;
+        }
+        if (r1 == cur) break;
     }
+    
     if (sendto
         (d->listen_fd, buf, pos - buf, 0,
          (struct sockaddr *) &d->client_addr,
          sizeof(struct sockaddr_in)) < 0) {
+#ifdef WIN32         
         perror("send to");
+#else
+        ERR("sendto client error: %s\n", strerror(errno));
+#endif
         ret = -1;
         goto err2;
     }
+    
+    DBG("send to client %s:%d success from cache.\n",
+        inet_ntoa(d->client_addr.sin_addr),
+        ntohs(d->client_addr.sin_port)
+    );
+    
     ret = 0;
     memset(d, 0, sizeof(struct msg_data));
 
