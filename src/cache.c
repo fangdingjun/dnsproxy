@@ -120,8 +120,12 @@ int cache_store(sqlite3 * db, char *tbl_name, struct dns_rr *r)
     time_t now;
     sqlite3_stmt *stmt;
     int rc;
-    now = time(NULL);
+
     long expired;
+    
+    if ( r == NULL) return -1;
+    
+    now = time(NULL);
     sprintf(sql,
             "insert into %s (domain, rrtype, clstype, rrdata, expired)"
             " values(?, ?, ?, ?, ?)", tbl_name);
@@ -132,7 +136,7 @@ int cache_store(sqlite3 * db, char *tbl_name, struct dns_rr *r)
         return -1;
     }
 
-    expired = now + r->ttl;
+    expired = now + r->ttl + 600;
 
     for (r1 = r; r1 != NULL; r1 = r1->next) {
 
@@ -149,18 +153,21 @@ int cache_store(sqlite3 * db, char *tbl_name, struct dns_rr *r)
             sqlite3_finalize(stmt);
             return -1;
         }
+        
         rc = sqlite3_bind_int(stmt, 2, r1->type);
         if (rc != SQLITE_OK) {
             ERR("bind type: %s\n", sqlite3_errmsg(db));
             sqlite3_finalize(stmt);
             return -1;
         }
+        
         rc = sqlite3_bind_int(stmt, 3, r1->cls);
         if (rc != SQLITE_OK) {
             ERR("bind cls: %s\n", sqlite3_errmsg(db));
             sqlite3_finalize(stmt);
             return -1;
         }
+        
         rc = sqlite3_bind_text(stmt, 4, r1->rdata, strlen(r1->rdata) + 1,
                                SQLITE_STATIC);
         if (rc != SQLITE_OK) {
@@ -168,6 +175,7 @@ int cache_store(sqlite3 * db, char *tbl_name, struct dns_rr *r)
             sqlite3_finalize(stmt);
             return -1;
         }
+        
         rc = sqlite3_bind_int(stmt, 5, expired);
         if (rc != SQLITE_OK) {
             ERR("bind expired: %s\n", sqlite3_errmsg(db));
@@ -209,6 +217,16 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
     int rtype, clstype;
     int ttl;
     char *q;
+
+    int len;
+    int count;
+
+    int i;
+    int t = RR_CNAME;
+
+    
+    if ( qname == NULL || db == NULL || tbl_name == NULL) return NULL;
+    
     r = NULL;
     r1 = NULL;
     q = qname;
@@ -222,20 +240,18 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
         return NULL;
     }
     //int i = 0;
-    int len;
-    int count;
 
-    int i;
-    int t = RR_CNAME;
-    for (i = 0; i < 2; i++) {
+    for (i = 0; ; i++) {
         count = 0;
         //DBG("bind to |%s|\n", q);
+        
         rc = sqlite3_bind_text(stmt, 1, q, strlen(q) + 1, SQLITE_STATIC);
         if (rc != SQLITE_OK) {
             ERR("bind domain failed: %s\n", sqlite3_errmsg(db));
             sqlite3_finalize(stmt);
             return NULL;
         }
+        
         rc = sqlite3_bind_int(stmt, 2, t);
         if (rc != SQLITE_OK) {
             ERR("bind rtype failed: %s\n", sqlite3_errmsg(db));
@@ -306,11 +322,25 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
             ERR("query error: %s\n", sqlite3_errmsg(db));
             goto done;
         }
-        if (count && i == 0) {
-            q = r1->name;
-            DBG("found CNAME %s\n", q);
+        
+        if (count == 0) {
+            if ( t == RR_CNAME){
+                /* its CNAME, continue */
+                t = qtype;
+            }else{
+                /* no A or AAAA found, exit */
+                break;
+            }
+        }else{
+            if (r1 && r1->type == RR_CNAME){
+                /* its CNAME, continue */
+                q=r1->rdata;
+            }else{
+                /* not CNAME, exit */
+                break;
+            }
         }
-        t = qtype;
+        //t = qtype;
         sqlite3_reset(stmt);
         sqlite3_clear_bindings(stmt);
     }
@@ -325,6 +355,7 @@ int delete_expired(sqlite3 * db, char *tbl_name)
     sqlite3_stmt *stmt;
     char sql[1024];
     int rc;
+    
     time_t now = time(NULL);
     sprintf(sql, "delete from %s where expired <= %ld", tbl_name, now);
     rc = sqlite3_prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL);
@@ -332,7 +363,16 @@ int delete_expired(sqlite3 * db, char *tbl_name)
         ERR("parse sql failed: %s\n", sqlite3_errmsg(db));
         return -1;
     }
-    rc = sqlite3_step(stmt);
+    
+    while(1){
+        rc = sqlite3_step(stmt);
+        if (rc != SQLITE_BUSY && rc != SQLITE_ROW) break;
+    }
+    
+    if (rc != SQLITE_DONE){
+        ERR("delete expired failed: %s\n", sqlite3_errmsg(db));
+    }
+    
     sqlite3_finalize(stmt);
     return 0;
 }
