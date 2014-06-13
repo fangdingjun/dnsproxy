@@ -33,13 +33,17 @@ to use GNU automake, run command:
 
 to use cmake, run command:
 
-    cmake .
+    mkdir build
+    cd build
+    cmake ..
     make
  
 ###Windows
 on Windows, you comilie it to mingw with cmake, MSVC is not support, run follow command to compile:
 
-    cmake -G "MinGW Makefiles"
+    mkdir build
+    cd build
+    cmake -G "MinGW Makefiles" ..
     mingw32-make
     
 ##dns server
@@ -65,7 +69,7 @@ or this command on windows
             
 you can set your system dns to 127.0.0.1
 
-###configure
+###config file
 the default configure is dnsproxy.cfg at current director, or you can use -c to special a other configure file
 
 this is a sample configure file
