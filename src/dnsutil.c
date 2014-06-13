@@ -559,3 +559,50 @@ int str2label(const char *src, char *dst)
     p2++;
     return (p2 - dst);
 }
+
+int label2str(const char *buf, char *pos, char *dst, int buf_len){
+    char *p1;
+    char *p2;
+    char *end;
+    int offset = 0;
+    uint8_t s;
+    int jump = 0;
+    end = buf + buf_len;
+    
+    p1  = pos;
+    p2 = dst;
+    
+    
+    while(1){
+        s = *p1;
+        if (s == 0) break;
+        
+        if (s >= 0xc0){
+            uint16_t s1;
+            s1= *(uint16_t *)p1;
+            *((uint8_t *)&s1) &= (~(0x3<<6));
+            s1=ntohs(s1);
+            p1=buf+s1;
+            if ( p1 > end){
+                *dst='\0';
+                return -1;
+            }
+            offset += 2;
+            jump++;
+        }
+        if ((p2 + s) > end){
+            *dst='\0';
+            return -1;
+        }
+        p1++;
+        if(!jump) offset+=1;
+        memcpy(p2, p1, s);
+        p1+=s;
+        p2+=s;
+        *p2 = '.';
+        p2++;
+        if(!jump) offset+=s;
+    }
+    *p2 = '\0';
+    return offset;
+}
