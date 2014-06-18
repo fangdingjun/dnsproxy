@@ -4,6 +4,7 @@
 #include "dnsproxy.h"
 #include "cache.h"
 
+int is_exists(sqlite3 *db, char *tbl_name, char *name, int type, char *rdata);
 
 sqlite3 *open_db(char *filename)
 {
@@ -136,17 +137,29 @@ int cache_store(sqlite3 * db, char *tbl_name, struct dns_rr *r)
         return -1;
     }
 
-    expired = now + r->ttl + 600;
+    
 
     for (r1 = r; r1 != NULL; r1 = r1->next) {
 
         if (r1->type != RR_A && r1->type != RR_AAAA
             && r1->type != RR_CNAME)
             continue;
-
+        
+        /* check if exists on cache */
+        if (is_exists(db, tbl_name, r1->name, r1->type, (char *)r1->rdata) > 0){
+            DBG("cache: %s IN 0x%02x %s is exists, skip store it\n", 
+                r1->name, r1->type, (char *)r1->rdata);
+            continue;
+        }
+        
+        expired = now + r1->ttl + 600;
+        
+        DBG("cache store: %s IN 0x%02x %s, expired in %ld\n",
+            r1->name, r1->type, (char *)r1->rdata, expired);
+        
         //sqlite3_bind_text(stmt, 1, tbl_name, strlen(tbl_name) + 1,
         //                 SQLITE_STATIC);
-        rc = sqlite3_bind_text(stmt, 1, r1->name, strlen(r1->name) + 1,
+        rc = sqlite3_bind_text(stmt, 1, r1->name, strlen(r1->name),
                                SQLITE_STATIC);
         if (rc != SQLITE_OK) {
             ERR("bind domain: %s\n", sqlite3_errmsg(db));
@@ -168,7 +181,7 @@ int cache_store(sqlite3 * db, char *tbl_name, struct dns_rr *r)
             return -1;
         }
         
-        rc = sqlite3_bind_text(stmt, 4, r1->rdata, strlen(r1->rdata) + 1,
+        rc = sqlite3_bind_text(stmt, 4, r1->rdata, strlen(r1->rdata),
                                SQLITE_STATIC);
         if (rc != SQLITE_OK) {
             ERR("bind rdata: %s\n", sqlite3_errmsg(db));
@@ -224,6 +237,7 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
     int i;
     int t = RR_CNAME;
 
+    int has_a = 0;
     
     if ( qname == NULL || db == NULL || tbl_name == NULL) return NULL;
     
@@ -245,7 +259,7 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
         count = 0;
         //DBG("bind to |%s|\n", q);
         
-        rc = sqlite3_bind_text(stmt, 1, q, strlen(q) + 1, SQLITE_STATIC);
+        rc = sqlite3_bind_text(stmt, 1, q, strlen(q), SQLITE_STATIC);
         if (rc != SQLITE_OK) {
             ERR("bind domain failed: %s\n", sqlite3_errmsg(db));
             sqlite3_finalize(stmt);
@@ -320,7 +334,13 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
         }
         if (rc != SQLITE_DONE) {
             ERR("query error: %s\n", sqlite3_errmsg(db));
+            if (r) free_rr(r);
+            r = NULL;
             goto done;
+        }
+        
+        if(r1){
+            DBG("cache found: %s IN 0x%02x %s\n", r1->name, r1->type, (char *)r1->rdata);
         }
         
         if (count == 0) {
@@ -340,12 +360,31 @@ struct dns_rr *cache_fetch(sqlite3 * db, char *tbl_name, char *qname,
                 break;
             }
         }
-        //t = qtype;
+        
+        DBG("query again\n");
         sqlite3_reset(stmt);
         sqlite3_clear_bindings(stmt);
     }
+  
+    DBG("cache query done\n");
   done:
     sqlite3_finalize(stmt);
+        
+    if (r){
+        /* check if found special type record */
+        for( r1=r; r1 != NULL; r1 = r1->next){
+            if( r1->type == qtype){
+                has_a = 1;
+                break;
+            }
+        }
+        
+        if (! has_a){
+            free_rr(r);
+            r = NULL;
+            DBG("cache: query type 0x%02x not found, free rr\n", qtype);
+        }
+    }    
 
     return r;
 }
@@ -375,4 +414,64 @@ int delete_expired(sqlite3 * db, char *tbl_name)
     
     sqlite3_finalize(stmt);
     return 0;
+}
+
+
+int is_exists(sqlite3 *db, char *tbl_name, char *name, int type, char *rdata){
+    sqlite3_stmt *stmt;
+    char sql[512];
+    int rc;
+    int num = 0;
+    
+    sprintf(sql, "select count(domain) as d from %s where domain = '%s' and  rrtype = %d and expired > %ld",
+        tbl_name, name, type, time(NULL));
+    
+    rc = sqlite3_prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL);
+    if (rc != SQLITE_OK){
+        ERR("sql error: %s\n", sqlite3_errmsg(db));
+        return -1;
+    }
+    
+    while(1){
+        rc = sqlite3_step(stmt);
+        if (rc == SQLITE_BUSY) continue;
+        if (rc != SQLITE_ROW) break;
+        num = sqlite3_column_int(stmt, 0);
+        //DBG("num = %d\n", num);
+    }
+    
+    if (rc != SQLITE_DONE){
+        ERR("sql query failed: %s\n", sqlite3_errmsg(db));
+        num = -1;
+        goto done;
+    }
+    if ( num > 0 && num < 10){
+        if ( type == RR_A || type == RR_AAAA){
+            /* free previous stmt */
+            sqlite3_finalize(stmt);
+            sprintf(sql, "select count(domain) from %s where domain = '%s' and "
+                "rrtype = %d and rrdata = '%s' and expired > %ld",
+                tbl_name, name, type, rdata, time(NULL));
+            rc = sqlite3_prepare_v2(db, sql, strlen(sql) + 1, &stmt, NULL);
+            if (rc != SQLITE_OK){
+                ERR("parse sql failed: %s\n", sqlite3_errmsg(db));
+                num = 1;
+                goto done;
+            }
+            while(1){
+                rc = sqlite3_step(stmt);
+                if (rc == SQLITE_BUSY) continue;
+                if ( rc != SQLITE_ROW) break;
+                num = sqlite3_column_int(stmt, 0);
+            }
+            if (rc != SQLITE_DONE){
+                ERR("sql execute error: %s\n", sqlite3_errmsg(db));
+                num =1;
+                goto done;
+            }
+        }
+    }
+    done:
+        sqlite3_finalize(stmt);
+        return num;
 }
