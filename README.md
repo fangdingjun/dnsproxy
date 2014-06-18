@@ -1,7 +1,7 @@
 dnsutil
 =======
 
-this is a dns proxy server writen by C
+this is a dns proxy server written by C
 
 the server have some features:
   1. speedup the dns query
@@ -16,9 +16,8 @@ for DNS cache pollution, refer to
 
 ##requirement
 
-there are two versions:
 
- dnsproxy.c is a pure C version, it does not depend on the other libraries
+ dnsproxy does not depend on the other libraries
  
 
 ##compile
@@ -33,13 +32,17 @@ to use GNU automake, run command:
 
 to use cmake, run command:
 
-    cmake .
+    mkdir build
+    cd build
+    cmake ..
     make
  
 ###Windows
 on Windows, you comilie it to mingw with cmake, MSVC is not support, run follow command to compile:
 
-    cmake -G "MinGW Makefiles"
+    mkdir build
+    cd build
+    cmake -G "MinGW Makefiles" ..
     mingw32-make
     
 ##dns server
@@ -65,7 +68,7 @@ or this command on windows
             
 you can set your system dns to 127.0.0.1
 
-###configure
+###config file
 the default configure is dnsproxy.cfg at current director, or you can use -c to special a other configure file
 
 this is a sample configure file
