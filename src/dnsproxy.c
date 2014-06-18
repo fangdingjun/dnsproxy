@@ -271,6 +271,8 @@ int recv_from_server(struct msg_data *d)
                 }
             } else if (rr->type == RR_AAAA) {
                 DBG("%s IN AAAA %s\n", rr->name, (char *) rr->rdata);
+            } else if (rr->type == RR_CNAME) {
+                DBG("%s IN CNAME %s\n", rr->name, (char *) rr->rdata);
             }
         }
         
@@ -736,8 +738,18 @@ int process_cache(struct msg_data *d)
     }
     
     m = malloc(sizeof(struct dns_msg));
+    if (m == NULL){
+        ERR("out of memory\n");
+        return -1;
+    }
     memset(m, 0, sizeof(struct dns_msg));
+    
     m->buf = malloc(d->msg_len);
+    if (m->buf == NULL){
+        ERR("out of memory\n");
+        ret = -1;
+        goto err1;
+    }
     memcpy(m->buf, d->msg_buf, d->msg_len);
     m->msg_len = d->msg_len;
     
@@ -747,14 +759,26 @@ int process_cache(struct msg_data *d)
         ret = -1;
         goto err1;
     }
+    
+    DBG("query %s IN 0x%02x\n", m->qd->name, m->qd->type);    
+    
     r = cache_fetch(db, cache_table, m->qd->name, m->qd->type);
     if (r == NULL) {
         ret = -1;
         goto err1;
     }
+    
     for (r1 = r; r1 != NULL; r1 = r1->next) {
         ancount++;
     }
+    
+    if (ancount == 0){
+        ret = -1;
+        goto err1;
+    }
+    
+    DBG("cache: ancount %d\n", ancount);
+    
     memcpy(buf, d->msg_buf, 12);
     h = (struct msg_header *) buf;
     h->qdcount = htons(1);
@@ -786,7 +810,8 @@ int process_cache(struct msg_data *d)
     struct dns_rr *cur;
     int rand_start = rand() % ancount;
     cur = first = r;
-    for (i=0; i< rand_start; i++){
+    
+    for (i=0; i < rand_start; i++){
         cur = cur->next;
     }
     
@@ -805,6 +830,10 @@ int process_cache(struct msg_data *d)
         } else {
             memcpy(pos, label, offset);
             pos += offset;
+        }
+        if ((pos - buf) >= 504){
+            ERR("out of buffer\n");
+            goto err2;
         }
         *((unsigned short *) pos) = htons(r1->type);
         pos += 2;
