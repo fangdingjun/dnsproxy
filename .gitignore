@@ -37,4 +37,5 @@ install-sh
 depcomp
 *.log
 stamp-h1
+build
 
