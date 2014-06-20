@@ -732,53 +732,53 @@ int process_cache(struct msg_data *d)
     char label[100];
     char *p1;
     char *lbl_p;
-    
+
     if (db == NULL) {
         return -1;
     }
-    
+
     m = malloc(sizeof(struct dns_msg));
-    if (m == NULL){
+    if (m == NULL) {
         ERR("out of memory\n");
         return -1;
     }
     memset(m, 0, sizeof(struct dns_msg));
-    
+
     m->buf = malloc(d->msg_len);
-    if (m->buf == NULL){
+    if (m->buf == NULL) {
         ERR("out of memory\n");
         ret = -1;
         goto err1;
     }
     memcpy(m->buf, d->msg_buf, d->msg_len);
     m->msg_len = d->msg_len;
-    
+
     parse_msg(m);
-    
+
     if (m->qd == NULL || m->qd->name == NULL) {
         ret = -1;
         goto err1;
     }
-    
-    DBG("query %s IN 0x%02x\n", m->qd->name, m->qd->type);    
-    
+
+    DBG("query %s IN 0x%02x\n", m->qd->name, m->qd->type);
+
     r = cache_fetch(db, cache_table, m->qd->name, m->qd->type);
     if (r == NULL) {
         ret = -1;
         goto err1;
     }
-    
+
     for (r1 = r; r1 != NULL; r1 = r1->next) {
         ancount++;
     }
-    
-    if (ancount == 0){
+
+    if (ancount == 0) {
         ret = -1;
         goto err1;
     }
-    
+
     DBG("cache: ancount %d\n", ancount);
-    
+
     memcpy(buf, d->msg_buf, 12);
     h = (struct msg_header *) buf;
     h->qdcount = htons(1);
@@ -789,11 +789,11 @@ int process_cache(struct msg_data *d)
     flags = 0;
 
     p1 = (char *) &flags;
-    p1[0] |= ((1 << 7) | 0x1); /* rq rd */
-    p1[1] |= (1 << 7);  /* ra */
+    p1[0] |= ((1 << 7) | 0x1);  /* rq rd */
+    p1[1] |= (1 << 7);          /* ra */
 
     h->flags = flags;
-    
+
     //DBG("flags: 0x%04x\n", flags);
     pos = buf + 12;
     offset = str2label(m->qd->name, label);
@@ -804,20 +804,20 @@ int process_cache(struct msg_data *d)
     pos += 2;
     *((unsigned short *) pos) = htons(m->qd->cls);
     pos += 2;
-    
+
     int i;
     struct dns_rr *first;
     struct dns_rr *cur;
     int rand_start = rand() % ancount;
     cur = first = r;
-    
-    for (i=0; i < rand_start; i++){
+
+    for (i = 0; i < rand_start; i++) {
         cur = cur->next;
     }
-    
+
     r1 = cur;
-    while(1) {    
-        if (r1 == NULL){
+    while (1) {
+        if (r1 == NULL) {
             ERR("first record is NULL\n");
             break;
         }
@@ -831,7 +831,7 @@ int process_cache(struct msg_data *d)
             memcpy(pos, label, offset);
             pos += offset;
         }
-        if ((pos - buf) >= 504){
+        if ((pos - buf) >= 504) {
             ERR("out of buffer\n");
             goto err2;
         }
@@ -846,13 +846,14 @@ int process_cache(struct msg_data *d)
             pos += 2;
 #ifdef WIN32
             struct sockaddr_storage sa;
-            struct sockaddr_in *sin=(struct sockaddr_in *)&sa;
+            struct sockaddr_in *sin = (struct sockaddr_in *) &sa;
             memset(&sa, 0, sizeof(sa));
-            sa.ss_family=AF_INET;
+            sa.ss_family = AF_INET;
             int addlen = sizeof(*sin);
 
-            WSAStringToAddress(r1->rdata, AF_INET, NULL, (LPSOCKADDR) sin, &addlen);
-            memcpy(pos, (void *)&sin->sin_addr, 4);
+            WSAStringToAddress(r1->rdata, AF_INET, NULL, (LPSOCKADDR) sin,
+                               &addlen);
+            memcpy(pos, (void *) &sin->sin_addr, 4);
 
 #else
             inet_pton(AF_INET, r1->rdata, pos);
@@ -863,12 +864,13 @@ int process_cache(struct msg_data *d)
             pos += 2;
 #ifdef WIN32
             struct sockaddr_storage sa;
-            struct sockaddr_in6 *sin6=(struct sockaddr_in6 *)&sa;
-            int addlen=sizeof(*sin6);
+            struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *) &sa;
+            int addlen = sizeof(*sin6);
             memset(&sa, 0, sizeof(sa));
             sa.ss_family = AF_INET6;
-            WSAStringToAddress(r1->rdata, AF_INET6, NULL, (LPSOCKADDR) sin6, &addlen);
-            memcpy(pos, (void *)&sin6->sin6_addr, 16);
+            WSAStringToAddress(r1->rdata, AF_INET6, NULL,
+                               (LPSOCKADDR) sin6, &addlen);
+            memcpy(pos, (void *) &sin6->sin6_addr, 16);
 #else
             inet_pton(AF_INET6, r1->rdata, pos);
 #endif
@@ -885,17 +887,18 @@ int process_cache(struct msg_data *d)
             goto err2;
         }
         r1 = r1->next;
-        if ( r1 == NULL){
+        if (r1 == NULL) {
             r1 = first;
         }
-        if (r1 == cur) break;
+        if (r1 == cur)
+            break;
     }
-    
+
     if (sendto
         (d->listen_fd, buf, pos - buf, 0,
          (struct sockaddr *) &d->client_addr,
          sizeof(struct sockaddr_in)) < 0) {
-#ifdef WIN32         
+#ifdef WIN32
         perror("send to");
 #else
         ERR("sendto client error: %s\n", strerror(errno));
@@ -903,12 +906,11 @@ int process_cache(struct msg_data *d)
         ret = -1;
         goto err2;
     }
-    
+
     DBG("send to client %s:%d success from cache.\n",
-        inet_ntoa(d->client_addr.sin_addr),
-        ntohs(d->client_addr.sin_port)
-    );
-    
+        inet_ntoa(d->client_addr.sin_addr), ntohs(d->client_addr.sin_port)
+        );
+
     ret = 0;
     memset(d, 0, sizeof(struct msg_data));
 

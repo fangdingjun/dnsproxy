@@ -250,7 +250,7 @@ int get_blackip(char *filename, char **ips)
         return -1;
     }
     buf1 = (char *) malloc(65536);
-    if(!buf1){
+    if (!buf1) {
         fprintf(stderr, "out of memory\n");
         *ips = NULL;
         return -1;
