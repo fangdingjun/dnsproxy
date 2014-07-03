@@ -19,6 +19,7 @@
 #include "dnsproxy.h"
 #include "cache.h"
 #include <stdlib.h>
+#include <ldns/ldns.h>
 
 #define MAX_QUEUE 100
 
@@ -121,12 +122,13 @@ int recv_from_client(struct msg_data *d)
     DBG("recv %d bytes from client %s:%d\n", d->msg_len,
         inet_ntoa(d->client_addr.sin_addr),
         ntohs(d->client_addr.sin_port));
-        
+#if 0     
     /* lookup for cache */    
-    
+     
     if (process_cache(d) == 0) {
         return 0;
     }
+#endif
     
     
     /* no cache, query upstream server */
@@ -229,16 +231,90 @@ int recv_from_server(struct msg_data *d)
 
     /* parse the dns message and check the black list */
     do {
-        struct dns_msg *m;
-        struct dns_rr *rr;
+        //struct dns_msg *m;
+        //struct dns_rr *rr;
         char *ip;
         char *ip_found;
         int found = 0;
-
+        int i;
+        ldns_buffer *b=NULL; 
+        ldns_pkt *p=NULL;
+        ldns_rr_list *an;
+        ldns_rr *rr;
+        ldns_rdf *rdf;
         /* no list loaded */
         if (!black_ips)
             break;
 
+        b=LDNS_MALLOC(ldns_buffer);
+        if(!b){
+            ERR("allocate buffer failed\n");
+            goto done;
+        }
+
+        ldns_buffer_new_frm_data(b,buf,msg_len);
+
+        /* parse dns message */
+        if(ldns_buffer2pkt_wire(&p, b) != LDNS_STATUS_OK){
+            ERR("parse dns packet failed\n");
+            /* ignore the packet */
+            found = 1;
+            goto done;
+        }
+
+        /* check response code */
+        if (ldns_pkt_get_rcode(p) == LDNS_RCODE_SERVFAIL){
+
+            /* ignore the response when server fail */
+            found = 1;
+            goto done;
+        }
+
+        if (ldns_pkt_ancount(p)){
+            an = ldns_pkt_answer(p);
+            if(logfp){
+                ldns_rr_list_print(logfp,an);
+            }
+        }else{
+            goto done;
+        }
+
+        for (i=0; i< ldns_pkt_ancount(p); i++){
+            rr=ldns_rr_list_rr(an, i);
+            if (ldns_rr_get_type(rr) == LDNS_RR_TYPE_A){
+                ldns_buffer *out;
+                //char *ip;
+                //char *p1;
+                out=ldns_buffer_new(20);
+                if (!out){
+                    ERR("new buffer failed\n");
+                    goto done;
+                }
+                rdf = ldns_rr_a_address(rr);
+                if (ldns_rdf2buffer_str_a(out, rdf) != LDNS_STATUS_OK){
+                    ERR("rdf2buffer_str_a failed\n");
+                    ldns_buffer_free(out);
+                    goto done;
+                }
+                ip=ldns_buffer_export2str(out);
+                if(ip == NULL){
+                    ERR("buffer export failed\n");
+                    ldns_buffer_free(out);
+                    goto done;
+                }
+                ldns_buffer_free(out);
+                ip_found=strstr(black_ips, ip);
+                if(ip_found){
+                    DBG("fond bad ip %s\n", ip);
+                    found = 1;
+                    LDNS_FREE(ip);
+                    goto done;
+                }
+                LDNS_FREE(ip);
+            }
+        }
+
+#if 0
         /* allocate memory */
         m = (struct dns_msg *) malloc(sizeof(struct dns_msg));
         if (m == NULL) {
@@ -275,7 +351,6 @@ int recv_from_server(struct msg_data *d)
                 DBG("%s IN CNAME %s\n", rr->name, (char *) rr->rdata);
             }
         }
-        
         if (!found) {
             cache_store(db, cache_table, m->an);
         }
@@ -283,6 +358,14 @@ int recv_from_server(struct msg_data *d)
 
         /* free memory */
         free_dns_msg(m);
+#endif
+done:
+        if (b){
+            ldns_buffer_free(b);
+        }
+        if(p){
+            ldns_pkt_free(p);
+        }
 
         if (found) {
             /* ignore the response */
