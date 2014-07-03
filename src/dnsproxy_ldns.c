@@ -152,7 +152,7 @@ int process_client_request(struct client *c)
         printf("read from client error\n");
         return -1;
     }
-    printf("read %d bytes from client\n", s1);                          
+    //printf("read %d bytes from client\n", s1);                          
     c->msg_len = s1;
     send_to_server(c, (uint8_t *)data);
     //free(data);
@@ -182,7 +182,7 @@ int send_to_server(struct client *c, uint8_t * data)
     i = 0;
     while (servers[i] != NULL) {
         srv_addr.sin_addr.s_addr = inet_addr(servers[i]);
-        printf("send to %s\n", servers[i]);
+        //printf("send to %s\n", servers[i]);
         sendto(sock, (char *)data, c->msg_len, 0,
                (struct sockaddr *) &srv_addr, sizeof(srv_addr)
             );
@@ -282,10 +282,12 @@ int process_srv_response(struct client *c)
     }
 
     ancount = ldns_pkt_ancount(p);
-
+    
+    /*
     if (ancount) {
         ldns_pkt_print(stdout, p);
     }
+    */
 
     an = ldns_pkt_answer(p);
 
@@ -395,7 +397,7 @@ int main(int argc, char *argv[])
             /* timeout */
             free_timeout_client();
         } else {
-            printf("%d events\n", nr);
+            //printf("%d events\n", nr);
             check_listen_fd(listen_sock, &rfds);
             check_srv_fd(&rfds);
         }
