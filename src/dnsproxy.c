@@ -263,7 +263,8 @@ int recv_from_server(struct msg_data *d)
         }
 
         /* check response code */
-        if (ldns_pkt_get_rcode(p) == LDNS_RCODE_SERVFAIL){
+        if (ldns_pkt_get_rcode(p) == LDNS_RCODE_SERVFAIL ||
+                ldns_pkt_get_rcode(p) == LDNS_RCODE_REFUSED){
 
             /* ignore the response when server fail */
             found = 1;
