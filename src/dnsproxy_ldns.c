@@ -1,10 +1,16 @@
+#include <ldns/config.h>
 #include <ldns/ldns.h>
 
+#if WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <mswsock.h>
+#else
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-
+#endif
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +20,10 @@
 #include <time.h>
 
 #define MAX_CLIENT 100
+
+#if WIN32
+#define close closesocket
+#endif
 
 struct client {
     int listen_sock;
@@ -27,6 +37,7 @@ struct client {
 
 char *black_ips = NULL;
 
+int get_blackip(char *,char **);
 struct client clients[MAX_CLIENT];
 int send_to_server(struct client *c, uint8_t * data);
 
@@ -107,17 +118,44 @@ struct client *get_free_client()
     return (struct client *) &clients[i];
 }
 
+int free_timeout_client(){
+    int i;
+    time_t now;
+    now = time(NULL);
+    for (i = 0; i < MAX_CLIENT; i++){
+        if (clients[i].status == 1){
+            if ((now - clients[i].last_time) > 3){
+                printf("close socket %d\n", clients[i].srv_sock);
+                close(clients[i].srv_sock);
+                clients[i].status = 0;
+            }
+        }
+    }
+    return 0;
+}
+
 int process_client_request(struct client *c)
 {
-    uint8_t *data;
-    size_t s = sizeof(c->client_addr);
-    size_t s1 = 512;
+    //uint8_t *data;
+    char data[512];
+    int s = sizeof(c->client_addr);
+    int s1;
+    /*
     data = ldns_udp_read_wire(c->listen_sock, &s1,
                               (struct sockaddr_storage *) &c->client_addr,
                               &s);
+                              */
+    if((s1=recvfrom(c->listen_sock, data, 512, 0,
+                          (struct sockaddr *) &c->client_addr,
+                          &s)) < 0){
+        c->status = 0;
+        printf("read from client error\n");
+        return -1;
+    }
+    printf("read %d bytes from client\n", s1);                          
     c->msg_len = s1;
-    send_to_server(c, data);
-    free(data);
+    send_to_server(c, (uint8_t *)data);
+    //free(data);
     return 0;
 }
 
@@ -144,8 +182,8 @@ int send_to_server(struct client *c, uint8_t * data)
     i = 0;
     while (servers[i] != NULL) {
         srv_addr.sin_addr.s_addr = inet_addr(servers[i]);
-
-        sendto(sock, data, c->msg_len, 0,
+        printf("send to %s\n", servers[i]);
+        sendto(sock, (char *)data, c->msg_len, 0,
                (struct sockaddr *) &srv_addr, sizeof(srv_addr)
             );
         i++;
@@ -205,8 +243,8 @@ int match_black_list(ldns_rr * r)
 
 int process_srv_response(struct client *c)
 {
-    uint8_t *data = NULL;
-    size_t s = 0;
+    //uint8_t *data = NULL;
+    //size_t s = 0;
     size_t s1 = 512;
     ldns_pkt *p = NULL;
     ldns_buffer *b = NULL;
@@ -219,13 +257,13 @@ int process_srv_response(struct client *c)
     int ret = 0;
 
     uint8_t rcode;
-
+    char data[512];
     int ancount = 0;
 
-    data = ldns_udp_read_wire(c->srv_sock, &s1, NULL, &s);
-    if (data == NULL) {
-        ret = -1;
-        goto err2;
+    //data = ldns_udp_read_wire(c->srv_sock, &s1, NULL, &s);
+    if (recvfrom(c->srv_sock, data, 512, 0, NULL, NULL) < 0){
+        printf("read from server error\n");
+        goto err1;
     }
 
     b = LDNS_MALLOC(ldns_buffer);
@@ -265,8 +303,12 @@ int process_srv_response(struct client *c)
         }
     }
 
-    sendto(c->listen_sock, data, s1, 0,
-           (struct sockaddr *) &c->client_addr, sizeof(c->client_addr));
+    if(sendto(c->listen_sock, (char *)data, s1, 0,
+           (struct sockaddr *) &c->client_addr, sizeof(c->client_addr)) < 0){
+        printf("send to client error\n");
+        ret = -1;
+        goto err1;
+    }
     c->status = 0;
 
     close(c->srv_sock);
@@ -274,10 +316,10 @@ int process_srv_response(struct client *c)
     ret = 0;
   err2:
     return ret;
-  err1:
+  err1:/*
     if (data) {
         free(data);
-    }
+    }*/
     if (b) {
         ldns_buffer_free(b);
     }
@@ -309,6 +351,12 @@ int main(int argc, char *argv[])
     int nr;
     //int i;
 
+#ifdef WIN32
+    /* initial the win32 sockets */
+    WSADATA wsaData;
+    WSAStartup(0x2020, &wsaData);
+#endif
+    
     memset(&clients, 0, sizeof(clients));
 
     //printf("begin to create socket...\n");
@@ -316,6 +364,21 @@ int main(int argc, char *argv[])
     if (listen_sock < 0) {
         return -1;
     }
+#ifdef WIN32
+    {
+        /* avoid errno 10054 on udp socket */
+        int reported = 0;
+        DWORD ret = 0;
+        int status = WSAIoctl(listen_sock, SIO_UDP_CONNRESET, &reported,
+                              sizeof(reported), NULL, 0, &ret, NULL, NULL);
+        if (status == SOCKET_ERROR) {
+            //perror("SIO_UDP_CONNRESET");
+            printf("ioctl failed\n");
+            exit(-1);
+        }
+        //INFO("SIO_UDP_CONNRESET ioctl success\n");
+    }
+#endif
     get_blackip("iplist.txt", &black_ips);
     //printf("listen success\n");
     //printf("begin to accept connection...\n");
@@ -330,7 +393,9 @@ int main(int argc, char *argv[])
             return -1;
         } else if (nr == 0) {
             /* timeout */
+            free_timeout_client();
         } else {
+            printf("%d events\n", nr);
             check_listen_fd(listen_sock, &rfds);
             check_srv_fd(&rfds);
         }
