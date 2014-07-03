@@ -59,13 +59,13 @@ add_library(ldns
     ../third-part/ldns-1.6.17/compat/inet_aton.c
     ../third-part/ldns-1.6.17/compat/inet_ntop.c
     ../third-part/ldns-1.6.17/compat/inet_pton.c
-    ../third-part/ldns-1.6.17/compat/isascii.c
+    #../third-part/ldns-1.6.17/compat/isascii.c
     ../third-part/ldns-1.6.17/compat/isblank.c
     ../third-part/ldns-1.6.17/compat/localtime_r.c
     ../third-part/ldns-1.6.17/compat/malloc.c
     ../third-part/ldns-1.6.17/compat/memmove.c
     ../third-part/ldns-1.6.17/compat/realloc.c
-    ../third-part/ldns-1.6.17/compat/snprintf.c
+    #../third-part/ldns-1.6.17/compat/snprintf.c
     ../third-part/ldns-1.6.17/compat/strlcpy.c
     ../third-part/ldns-1.6.17/compat/timegm.c
 )
@@ -111,3 +111,7 @@ endif()
 
 add_executable(dnsproxy_ldns dnsproxy_ldns.c parse_cfg.c)
 target_link_libraries(dnsproxy_ldns ldns)
+
+if(WIN32)
+    target_link_libraries(dnsproxy_ldns ws2_32)
+endif()
