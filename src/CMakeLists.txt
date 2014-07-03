@@ -20,7 +20,7 @@ include_directories( ${dnsproxy_SOURCE_DIR}/third-part/ldns-1.6.17/)
 
 add_library(ldns 
     ../third-part/ldns-1.6.17/buffer.c
-        ../third-part/ldns-1.6.17/dane.c
+    ../third-part/ldns-1.6.17/dane.c
     ../third-part/ldns-1.6.17/dname.c
     ../third-part/ldns-1.6.17/dnssec.c
     ../third-part/ldns-1.6.17/dnssec_sign.c
@@ -86,7 +86,7 @@ add_executable(dnsproxy dnsproxy.c dnsutil.c parse_cfg.c dnsproxy.h cache.c
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.c
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.h
     )
-
+target_link_libraries(dnsproxy ldns)
 if(WIN32)
     target_link_libraries(dnsc ws2_32)
     target_link_libraries(dnsproxy ws2_32)
@@ -109,6 +109,5 @@ else()
     target_link_libraries(sqlite dl pthread readline)
 endif()
 
-add_executable(a a.c)
-
-target_link_libraries(a ldns)
+add_executable(dnsproxy_ldns dnsproxy_ldns.c parse_cfg.c)
+target_link_libraries(dnsproxy_ldns ldns)
