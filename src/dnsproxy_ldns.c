@@ -277,7 +277,7 @@ int process_client_request(struct client *c)
 {
     //uint8_t *data;
     char data[512];
-    int s = sizeof(c->client_addr);
+    socklen_t s = sizeof(c->client_addr);
     int s1;
     /*
        data = ldns_udp_read_wire(c->listen_sock, &s1,
