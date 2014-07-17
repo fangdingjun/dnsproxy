@@ -27,18 +27,6 @@
 
 #define MAX_CLIENT 100
 
-#if WIN32
-#define close closesocket
-#endif
-
-FILE *logfp;
-int loglevel = 3;
-
-sqlite3 *db;
-char *cache_file = ":memory:";
-char *cache_table = "dns";
-size_t max_cache = 4 * 1024 * 1024;
-
 struct client {
 
     /* listen sock */
@@ -61,9 +49,11 @@ struct client {
     //char buf[512];
 };
 
+/* black ip lists */
 char *black_ips = NULL;
 
 int get_blackip(char *, char **);
+
 struct client clients[MAX_CLIENT];
 int sendto_server(struct client *c, const uint8_t * data);
 
@@ -71,7 +61,8 @@ int set_udp_sock_option(int sock_fd);
 
 int listen_sock_udp(const char *addr, uint16_t port);
 
-char *servers[] = {
+/* default servers */
+char *default_servers[] = {
     "202.180.160.1",
     "202.45.84.59",
     "202.45.84.67",
@@ -83,6 +74,63 @@ char *servers[] = {
     //"192.168.1.1",
     NULL
 };
+
+/* sqlite3 handle */
+sqlite3 *db = NULL;
+
+/* dns cache file */
+char *cache_file = ":memory:";
+
+/* dns cache table */
+char *cache_table = "dns";
+
+/* max cache size */
+size_t max_cache = 4 * 1024 * 1024;
+
+/* default listen ip */
+char *listen_ip = "127.0.0.1";
+
+/* default config file name */
+char *configfile = "dnsproxy.cfg";
+
+/* default listen port */
+int listen_port = 53;
+
+/* log */
+FILE *logfp = NULL;
+
+/* server list pointer */
+char **servers = default_servers;
+
+/* daemon or not */
+int become_daemon = 0;
+
+/* log file name pointer */
+char *logfile = "dnsproxy.log";
+
+/* default log level */
+int loglevel = 3;
+
+/* black ip list file name*/
+char *blacklist = "iplist.txt";
+
+/* map pointer to config file option name*/
+struct arg_map arguments[] = {
+    {"listen_ip", ARG_STRING, (void **) &listen_ip},
+    {"listen_port", ARG_INT, (void **) &listen_port},
+    {"servers", ARG_STR_ARRARY, (void **) &servers},
+    {"daemon", ARG_INT, (void **) &become_daemon},
+    {"blacklist", ARG_STRING, (void **) &blacklist},
+    {"logfile", ARG_STRING, (void **) &logfile},
+    {"loglevel", ARG_INT, (void **) &loglevel},
+    {NULL, 0, NULL}
+};
+
+#ifdef WIN32
+#define log_err(msg) perror(msg)
+#else
+#define log_err(msg) ERR(msg ": %s\n", strerr(errno))
+#endif
 
 int listen_sock_udp(const char *addr, uint16_t port)
 {
@@ -98,6 +146,8 @@ int listen_sock_udp(const char *addr, uint16_t port)
     if (port == 0) {
         port = default_port;
     }
+    
+    DBG("listen to %s:%d\n", addr, port);
 
     memset(&local_addr, 0, sizeof(local_addr));
 
@@ -107,16 +157,21 @@ int listen_sock_udp(const char *addr, uint16_t port)
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
-        perror("socket");
+        log_err("create socket failed");
         return -1;
     }
+
+    DBG("create listen socket success\n");
+
     //printf("socket success\n");
     if (bind(sock, (struct sockaddr *) &local_addr, sizeof(local_addr)) <
         0) {
-        perror("bind");
+        log_err("bind failed");
         close(sock);
         return -1;
     }
+
+    DBG("bind success, socket fd = %d\n", sock);
     //printf("bind success\n");
     //printf("success creat sock fd=%d\n", sock);
     return sock;
@@ -142,6 +197,7 @@ inline int set_read_fd(int listen_fd, fd_set * r)
         if (clients[i].srv_sock > max) {
             max = clients[i].srv_sock;
         }
+        DBG("add fd %d to select list\n", clients[i].srv_sock);
         FD_SET(clients[i].srv_sock, r);
     }
     return max;
@@ -214,8 +270,10 @@ int reply_from_cache(struct client *c, const uint8_t * data)
         ret = -1;
         goto err1;
     }
+    
+    DBG("found %d record from cache\n", ldns_rr_list_rr_count(an));
 
-    DBG("query db return\n");
+    //DBG("query db return\n");
     pkt_an = ldns_pkt_new();
     ldns_pkt_set_id(pkt_an, ldns_pkt_id(p));
     //ldns_pkt_set_flags(pkt_an, LDNS_RD|LDNS_RA|LDNS);
@@ -250,6 +308,8 @@ int reply_from_cache(struct client *c, const uint8_t * data)
 
     buf_an = ldns_buffer_new(1024);
     ldns_pkt2buffer_wire(buf_an, pkt_an);
+    
+    DBG("cache: send to client\n");
 
     if (sendto
         (c->listen_sock, (char *) ldns_buffer_begin(buf_an),
@@ -257,9 +317,10 @@ int reply_from_cache(struct client *c, const uint8_t * data)
          (struct sockaddr *) &c->client_addr,
          sizeof(c->client_addr)) < 0) {
         ret = -1;
+        log_err("send to client failed");
         goto err2;
     }
-    DBG("answer from cache:\n");
+    //DBG("answer from cache:\n");
 
     //ldns_pkt_print(stdout, pkt_an);
     ret = 1;
@@ -287,10 +348,11 @@ int process_client_request(struct client *c)
     if ((s1 = recvfrom(c->listen_sock, data, 512, 0,
                        (struct sockaddr *) &c->client_addr, &s)) < 0) {
         c->status = 0;
-        printf("read from client error\n");
+        log_err("error occured when read from client");
         return -1;
     }
-    //printf("read %d bytes from client\n", s1);                          
+    //printf("read %d bytes from client\n", s1);
+    DBG("receive %d bytes from client\n", s1);
     c->msg_len = s1;
 
     if (db) {
@@ -300,7 +362,8 @@ int process_client_request(struct client *c)
             return 0;
         }
     }
-
+    
+    DBG("forward request to server\n");
     sendto_server(c, (uint8_t *) data);
     //free(data);
     return 0;
@@ -320,6 +383,11 @@ int sendto_server(struct client *c, const uint8_t * data)
     srv_addr.sin_port = htons(53);
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0){
+        log_err("create server socket failed");
+        c->status = 0;
+        return -1;
+    }
 
     set_udp_sock_option(sock);
 
@@ -327,11 +395,14 @@ int sendto_server(struct client *c, const uint8_t * data)
     while (servers[i] != NULL) {
         srv_addr.sin_addr.s_addr = inet_addr(servers[i]);
         //printf("send to %s\n", servers[i]);
-        sendto(sock, (char *) data, c->msg_len, 0,
+        if (sendto(sock, (char *) data, c->msg_len, 0,
                (struct sockaddr *) &srv_addr, sizeof(srv_addr)
-            );
+            ) < 0){
+            log_err("send to server failed");
+        }
         i++;
     }
+
     c->srv_sock = sock;
     c->last_time = time(NULL);
 
@@ -407,10 +478,12 @@ int process_srv_response(struct client *c)
     int ancount = 0;
 
     //data = ldns_udp_read_wire(c->srv_sock, &s1, NULL, &s);
-    if (recvfrom(c->srv_sock, data, 512, 0, NULL, NULL) < 0) {
-        printf("read from server error\n");
+    if ((s1 = recvfrom(c->srv_sock, data, 512, 0, NULL, NULL)) < 0) {
+        log_err("error occured when read from server");
         goto err1;
     }
+
+    DBG("receive %d bytes from server\n", s1);
 
     b = LDNS_MALLOC(ldns_buffer);
 
@@ -424,20 +497,17 @@ int process_srv_response(struct client *c)
 
     rcode = ldns_pkt_get_rcode(p);
     if (rcode == LDNS_RCODE_SERVFAIL || rcode == LDNS_RCODE_REFUSED) {
+        DBG("SERVERFAIL response, ignore\n");
         goto err1;
     }
 
     ancount = ldns_pkt_ancount(p);
+    
+    DBG("server response %d answers\n", ancount);
 
-    /*
-       if (ancount) {
-       ldns_pkt_print(stdout, p);
-       }
-     */
 
     an = ldns_pkt_answer(p);
-    //DBG("answer:\n");
-    //ldns_rr_list_print(stdout, an);
+
     for (i = 0; i < ancount; i++) {
         a = ldns_rr_list_rr(an, i);
         switch (ldns_rr_get_type(a)) {
@@ -453,17 +523,20 @@ int process_srv_response(struct client *c)
     }
 
     if (db) {
-        DBG("store result\n");
+        DBG("cache records\n");
         cache_rr(an, db, cache_table);
     }
 
     if (sendto(c->listen_sock, (char *) data, s1, 0,
                (struct sockaddr *) &c->client_addr,
                sizeof(c->client_addr)) < 0) {
-        printf("send to client error\n");
+        log_err("error occoured when send to client");
         ret = -1;
         goto err1;
     }
+
+    DBG("send to client success\n");
+
     c->status = 0;
 
     close(c->srv_sock);
@@ -492,8 +565,9 @@ inline int check_srv_fd(fd_set * r)
     return 0;
 }
 
-int set_udp_sock_option(int sock_fd)
+inline int set_udp_sock_option(int sock_fd)
 {
+
 #ifdef WIN32
 
     /* avoid errno 10054 on udp socket */
@@ -503,7 +577,7 @@ int set_udp_sock_option(int sock_fd)
                           sizeof(reported), NULL, 0, &ret, NULL, NULL);
     if (status == SOCKET_ERROR) {
         //perror("SIO_UDP_CONNRESET");
-        printf("ioctl failed\n");
+        log_err("ioctl failed");
         //exit(-1);
     }
     //INFO("SIO_UDP_CONNRESET ioctl success\n");
@@ -512,13 +586,114 @@ int set_udp_sock_option(int sock_fd)
     return 0;
 }
 
-void sock_init()
+inline void sock_init()
 {
 #ifdef WIN32
+
+    DBG("initial win32 sockets\n");
     /* initial the win32 sockets */
     WSADATA wsaData;
     WSAStartup(0x2020, &wsaData);
 #endif
+}
+
+inline int daemon_init(){
+    if (become_daemon){
+        DBG("run in daemon mode\n");
+#if WIN32
+        FreeConsole();
+#else
+        daemon(1, 1);
+#endif
+        DBG("redirect output to NULL device\n");
+        freopen(NULLDEV, "w", stdout);
+        freopen(NULLDEV, "w", stderr);
+    }
+
+    return 0;
+}
+
+
+void usage(char *progname)
+{
+    printf("%s OPTIONS\n", progname);
+    printf("options:\n");
+    printf("    -h        show this message\n"
+           "    -c FILE   load config from FILE\n"
+           "    -d        run in daemon mode\n"
+           "    -l IP     listen on IP\n"
+           "    -p PORT   listen on PORT\n"
+           "    -g LEVEL  set loglevel to LEVEL\n"
+           "    -f FILE   write log to FILE\n");
+}
+
+int parse_cmdline(int argc, char *argv[], int times)
+{
+    int i;
+    if (argc < 2)
+        return 0;
+    for (i = 1; i < argc;) {
+        if (strcmp(argv[i], "-h") == 0) {
+            usage(argv[0]);
+            exit(0);
+        } else if (strcmp(argv[i], "-c") == 0) {
+            i++;
+            if (i >= argc) {
+                fprintf(stderr, "-c need an argument\n");
+                usage(argv[0]);
+                exit(-1);
+            }
+
+            /* we ignore the config file on second time */
+            if (times < 2) {
+                configfile = argv[i];
+            }
+            i++;
+        } else if (strcmp(argv[i], "-d") == 0) {
+            become_daemon = 1;
+            i++;
+        } else if (strcmp(argv[i], "-l") == 0) {
+            i++;
+            if (i >= argc) {
+                fprintf(stderr, "-l need a argument\n");
+                usage(argv[0]);
+                exit(-1);
+            }
+            listen_ip = argv[i];
+            i++;
+        } else if (strcmp(argv[i], "-p") == 0) {
+            i++;
+            if (i >= argc) {
+                fprintf(stderr, "-p need a argument\n");
+                usage(argv[0]);
+                exit(-1);
+            }
+            listen_port = atoi(argv[i]);
+            i++;
+        } else if (strcmp(argv[i], "-g") == 0) {
+            i++;
+            if (i >= argc) {
+                fprintf(stderr, "-g need a argument\n");
+                usage(argv[0]);
+                exit(-1);
+            }
+            loglevel = atoi(argv[i]);
+            i++;
+        } else if (strcmp(argv[i], "-f") == 0) {
+            i++;
+            if (i >= argc) {
+                fprintf(stderr, "-f need a argument\n");
+                usage(argv[0]);
+                exit(-1);
+            }
+            logfile = argv[i];
+            i++;
+        } else {
+            fprintf(stderr, "unknown option %s\n", argv[i]);
+            i++;
+        }
+    }
+    return 0;
 }
 
 
@@ -530,7 +705,39 @@ int main(int argc, char *argv[])
     int nr;
     //int i;
 
+    /* parse cmdline */
+    parse_cmdline(argc, argv, 1);
+
+    DBG("parse configure file\n");
+
+    /* parse config file */
+    parse_cfg(configfile, arguments);
+
+    /* parse cmdline again, the command line option has high priority */
+    parse_cmdline(argc, argv, 2);
+
+    if (blacklist) {
+
+        DBG("read black ip list\n");
+
+        /* read black list */
+        get_blackip(blacklist, &black_ips);
+    }
+
     logfp = stdout;
+
+    if (logfile) {
+        if (strcmp(logfile, "stdout") == 0
+            || strcmp(logfile, "stderr") == 0) {
+            logfp = stdout;
+        } else {
+            logfp = fopen(logfile, "a");
+            if (logfp == NULL) {
+                logfp = stdout;
+                fprintf(stderr, "open %s failed\n", logfile);
+            }
+        }
+    }
 
     sock_init();
 
@@ -548,9 +755,9 @@ int main(int argc, char *argv[])
 
     set_udp_sock_option(listen_sock);
 
-    get_blackip("iplist.txt", &black_ips);
     //printf("listen success\n");
     //printf("begin to accept connection...\n");
+    daemon_init();
 
     while (1) {
         tv.tv_sec = 2;
@@ -558,7 +765,7 @@ int main(int argc, char *argv[])
         int max_fd = set_read_fd(listen_sock, &rfds);
         nr = select(max_fd + 1, &rfds, NULL, NULL, &tv);
         if (nr < 0) {
-            perror("select");
+            log_err("select failed");
             return -1;
         } else if (nr == 0) {
             /* timeout */

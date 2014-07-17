@@ -239,10 +239,10 @@ static int cache_rr_cname(const ldns_rr_list * r, sqlite3 * db,
     PREPARE_SQL(db, sql, strlen(sql), stmt, ret, err1);
 
     now = time(NULL);
-    DBG("cache_rr now = %d\n", now);
+    //DBG("cache_rr now = %d\n", now);
 
     rcount = ldns_rr_list_rr_count(r);
-    DBG("begin to store rr...\n");
+    //DBG("begin to store rr...\n");
 
     /* cache CNAME */
     for (i = 0; i < rcount; i++) {
@@ -322,11 +322,12 @@ static int cache_rr_cname(const ldns_rr_list * r, sqlite3 * db,
         }
 
         EXEC_SQL_NO_RESULT(stmt, ret, err2);
-        DBG("store CNAME success\n");
+        //DBG("store CNAME success\n");
         /* reset */
         sqlite3_reset(stmt);
         sqlite3_clear_bindings(stmt);
     }
+    
     ret = 0;
   err2:
     sqlite3_finalize(stmt);
@@ -486,10 +487,13 @@ static int lookup_cache_by_type(ldns_rdf * owner, int type,
                                 const char *tblname)
 {
     if (type == LDNS_RR_TYPE_CNAME) {
+        DBG("cache CNAME\n");
         lookup_cache_by_cname(owner, ret, db, tblname);
     } else if (type == LDNS_RR_TYPE_A) {
+        DBG("cache A\n");
         lookup_cache_by_a_aaaa(owner, LDNS_RR_TYPE_A, ret, db, tblname);
     } else if (type == LDNS_RR_TYPE_AAAA) {
+        DBG("cache AAAA\n");
         lookup_cache_by_a_aaaa(owner, LDNS_RR_TYPE_AAAA, ret, db, tblname);
     }
     return 0;
