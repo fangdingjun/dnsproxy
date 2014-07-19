@@ -258,7 +258,7 @@ static int cache_rr_cname(const ldns_rr_list * r, sqlite3 * db,
         }
 
         if (cache_exists(r1, db, tblname) > 0) {
-            DBG("cache CNAME exists, skip\n");
+            DBG("cache: CNAME exists, skip\n");
             continue;
         }
 
@@ -390,7 +390,7 @@ static int cache_rr_a_aaaa(const ldns_rr_list * r, sqlite3 * db,
         t = ldns_rr_get_type(r1);
         if (t == LDNS_RR_TYPE_A || t == LDNS_RR_TYPE_AAAA) {
             if (cache_exists(r1, db, tblname) > 0) {
-                DBG("cache A or AAAA exists, skip\n");
+                DBG("cache: A or AAAA exists, skip\n");
                 break;
             }
             rdata = ldns_rr_rdf(r1, 0);
@@ -487,13 +487,13 @@ static int lookup_cache_by_type(ldns_rdf * owner, int type,
                                 const char *tblname)
 {
     if (type == LDNS_RR_TYPE_CNAME) {
-        DBG("cache CNAME\n");
+        //DBG("cache CNAME\n");
         lookup_cache_by_cname(owner, ret, db, tblname);
     } else if (type == LDNS_RR_TYPE_A) {
-        DBG("cache A\n");
+        //DBG("cache A\n");
         lookup_cache_by_a_aaaa(owner, LDNS_RR_TYPE_A, ret, db, tblname);
     } else if (type == LDNS_RR_TYPE_AAAA) {
-        DBG("cache AAAA\n");
+        //DBG("cache AAAA\n");
         lookup_cache_by_a_aaaa(owner, LDNS_RR_TYPE_AAAA, ret, db, tblname);
     }
     return 0;
