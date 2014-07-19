@@ -655,7 +655,9 @@ static int lookup_cache_by_a_aaaa(ldns_rdf * owner, int type,
 
         /* A or AAAA */
         new_rdf =
-            ldns_rdf_new_frm_data(type, length, rr_data + 2 + i * length);
+            ldns_rdf_new_frm_data(
+                    type == LDNS_RR_TYPE_A ? LDNS_RDF_TYPE_A : LDNS_RDF_TYPE_AAAA,
+                    length, rr_data + 2 + i * length);
         ldns_rr_push_rdf(new_rr, new_rdf);
 
         /* add to list */
