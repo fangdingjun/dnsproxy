@@ -262,16 +262,22 @@ int reply_from_cache(struct client *c, const uint8_t * data)
         ret = -1;
         goto err1;
     }
-    //DBG("query:\n");
-    //ldns_rr_print(stdout, ldns_rr_list_rr(q,0));
-    //ldns_pkt_print(stdout, p);
+
+    if (loglevel >= LOG_DEBUG){
+        ldns_buffer *b;
+        b = ldns_buffer_new(200);
+        ldns_rr_list2buffer_str(b, q);
+        DBG("query:\n%.*s", ldns_buffer_position(b), ldns_buffer_begin(b));
+        ldns_buffer_free(b);
+    }
+
     an = lookup_cache(ldns_rr_list_rr(q, 0), db, cache_table);
     if (an == NULL) {
         ret = -1;
         goto err1;
     }
     
-    DBG("found %d record from cache\n", ldns_rr_list_rr_count(an));
+    DBG("found %d records from cache\n", ldns_rr_list_rr_count(an));
 
     //DBG("query db return\n");
     pkt_an = ldns_pkt_new();
@@ -279,13 +285,13 @@ int reply_from_cache(struct client *c, const uint8_t * data)
     //ldns_pkt_set_flags(pkt_an, LDNS_RD|LDNS_RA|LDNS);
     //ldns_pkt_set_answer(pkt_an, an);
 
-    /* copy to reply pkt answer section */
+    /* copy to answer section of reply pkt */
     for (i = 0; i < ldns_rr_list_rr_count(an); i++) {
         ldns_rr_list_push_rr(ldns_pkt_answer(pkt_an),
                              ldns_rr_clone(ldns_rr_list_rr(an, i)));
     }
 
-    /* copdy to reply pkt question section */
+    /* copy to question section of reply pkt */
     for (i = 0; i < ldns_rr_list_rr_count(q); i++) {
         ldns_rr_list_push_rr(ldns_pkt_question(pkt_an),
                              ldns_rr_clone(ldns_rr_list_rr(q, i)));
@@ -308,8 +314,21 @@ int reply_from_cache(struct client *c, const uint8_t * data)
 
     buf_an = ldns_buffer_new(1024);
     ldns_pkt2buffer_wire(buf_an, pkt_an);
+
+    if (loglevel >= LOG_DEBUG){
+        ldns_buffer *b;
+        b = ldns_buffer_new(400);
+        ldns_rr_list2buffer_str(b, an);
+        DBG("answer from cache:\n%.*s", ldns_buffer_position(b),
+                ldns_buffer_begin(b));
+        ldns_buffer_free(b);
+    }
     
-    DBG("cache: send to client\n");
+    DBG("cache: send %d bytes to client %s:%d\n",
+            ldns_buffer_position(buf_an),
+            inet_ntoa(c->client_addr.sin_addr),
+            htons(c->client_addr.sin_port)
+            );
 
     if (sendto
         (c->listen_sock, (char *) ldns_buffer_begin(buf_an),
@@ -320,9 +339,7 @@ int reply_from_cache(struct client *c, const uint8_t * data)
         log_err("send to client failed");
         goto err2;
     }
-    //DBG("answer from cache:\n");
 
-    //ldns_pkt_print(stdout, pkt_an);
     ret = 1;
   err2:
     ldns_buffer_free(buf_an);
@@ -352,7 +369,10 @@ int process_client_request(struct client *c)
         return -1;
     }
     //printf("read %d bytes from client\n", s1);
-    DBG("receive %d bytes from client\n", s1);
+    DBG("receive %d bytes from client %s:%d\n", s1,
+            inet_ntoa(c->client_addr.sin_addr),
+            htons(c->client_addr.sin_port)
+            );
     c->msg_len = s1;
 
     if (db) {
@@ -394,7 +414,7 @@ int sendto_server(struct client *c, const uint8_t * data)
     i = 0;
     while (servers[i] != NULL) {
         srv_addr.sin_addr.s_addr = inet_addr(servers[i]);
-        //printf("send to %s\n", servers[i]);
+        DBG("send to server %s:%d\n", servers[i], 53);
         if (sendto(sock, (char *) data, c->msg_len, 0,
                (struct sockaddr *) &srv_addr, sizeof(srv_addr)
             ) < 0){
@@ -477,13 +497,23 @@ int process_srv_response(struct client *c)
     char data[512];
     int ancount = 0;
 
+    struct sockaddr_in saddr;
+    socklen_t len;
+
+    len = sizeof(saddr);
+    memset(&saddr, 0, len);
+
+
     //data = ldns_udp_read_wire(c->srv_sock, &s1, NULL, &s);
-    if ((s1 = recvfrom(c->srv_sock, data, 512, 0, NULL, NULL)) < 0) {
+    if ((s1 = recvfrom(c->srv_sock, data, 512, 0, (struct sockaddr *)&saddr, &len)) < 0) {
         log_err("error occured when read from server");
         goto err1;
     }
 
-    DBG("receive %d bytes from server\n", s1);
+    DBG("receive %d bytes from server %s:%d\n", s1,
+            inet_ntoa(saddr.sin_addr),
+            htons(saddr.sin_port)
+            );
 
     b = LDNS_MALLOC(ldns_buffer);
 
@@ -503,10 +533,17 @@ int process_srv_response(struct client *c)
 
     ancount = ldns_pkt_ancount(p);
     
-    DBG("server response %d answers\n", ancount);
-
+    DBG("server response %d records\n", ancount);
 
     an = ldns_pkt_answer(p);
+    if (loglevel >= LOG_DEBUG){
+        ldns_buffer *b;
+        b = ldns_buffer_new(400);
+        ldns_rr_list2buffer_str(b, an);
+        DBG("reply from server:\n%.*s", ldns_buffer_position(b),
+                ldns_buffer_begin(b));
+        ldns_buffer_free(b);
+    }
 
     for (i = 0; i < ancount; i++) {
         a = ldns_rr_list_rr(an, i);
@@ -523,10 +560,14 @@ int process_srv_response(struct client *c)
     }
 
     if (db) {
-        DBG("cache records\n");
+        //DBG("cache records\n");
         cache_rr(an, db, cache_table);
     }
 
+    DBG("send to client %s:%d\n",
+            inet_ntoa(c->client_addr.sin_addr),
+            htons(c->client_addr.sin_port)
+            );
     if (sendto(c->listen_sock, (char *) data, s1, 0,
                (struct sockaddr *) &c->client_addr,
                sizeof(c->client_addr)) < 0) {
@@ -534,8 +575,6 @@ int process_srv_response(struct client *c)
         ret = -1;
         goto err1;
     }
-
-    DBG("send to client success\n");
 
     c->status = 0;
 
