@@ -84,12 +84,12 @@ endif()
 
 include_directories( ${dnsproxy_SOURCE_DIR}/third-part/sqlite/)
 
-add_executable(dnsc dnsc.c dnsutil.c)
+add_executable(dnsc dnsc.c)
 
 #add_executable(dnsproxy dnsproxy.c dnsutil.c parse_cfg.c dnsproxy.h cache.c)
 
 #target_link_libraries(dnsproxy ldns sqlite)
-
+target_link_libraries(dnsc ldns)
 if(WIN32)
     target_link_libraries(dnsc ws2_32)
     #target_link_libraries(dnsproxy ws2_32)
