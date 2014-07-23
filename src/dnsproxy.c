@@ -1,3 +1,16 @@
+/*
+#============================================
+# Filename:
+#    dnsproxy.c
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   a dns proxy server
+#============================================
+*/
+
 #include <ldns/config.h>
 #include <ldns/ldns.h>
 
@@ -22,7 +35,6 @@
 #include <time.h>
 
 #include "cache.h"
-#include "dns.h"
 #include "dnsproxy.h"
 
 #define MAX_CLIENT 100
@@ -55,7 +67,7 @@ char *black_ips = NULL;
 int get_blackip(char *, char **);
 
 struct client clients[MAX_CLIENT];
-int sendto_server(struct client *c, const uint8_t * data);
+int send_to_server(struct client *c, const uint8_t * data);
 
 int set_udp_sock_option(int sock_fd);
 
@@ -384,12 +396,12 @@ int process_client_request(struct client *c)
     }
     
     DBG("forward request to server\n");
-    sendto_server(c, (uint8_t *) data);
+    send_to_server(c, (uint8_t *) data);
     //free(data);
     return 0;
 }
 
-int sendto_server(struct client *c, const uint8_t * data)
+int send_to_server(struct client *c, const uint8_t * data)
 {
     int sock;
     struct sockaddr_in srv_addr;
@@ -787,7 +799,7 @@ int main(int argc, char *argv[])
     memset(&clients, 0, sizeof(clients));
 
     //printf("begin to create socket...\n");
-    listen_sock = listen_sock_udp(NULL, 0);
+    listen_sock = listen_sock_udp(listen_ip, listen_port);
     if (listen_sock < 0) {
         return -1;
     }
