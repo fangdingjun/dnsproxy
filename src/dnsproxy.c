@@ -141,7 +141,7 @@ struct arg_map arguments[] = {
 #ifdef WIN32
 #define log_err(msg) perror(msg)
 #else
-#define log_err(msg) ERR(msg ": %s\n", strerr(errno))
+#define log_err(msg) ERR(msg ": %s\n", strerror(errno))
 #endif
 
 int listen_sock_udp(const char *addr, uint16_t port)
