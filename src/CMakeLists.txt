@@ -76,12 +76,6 @@ add_library(sqlite
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.h
 )
 
-if(WIN32)
-    add_definitions( -DUSE_SELECT)
-else()
-    add_definitions( -DUSE_EPOLL)
-endif()
-
 include_directories( ${dnsproxy_SOURCE_DIR}/third-part/sqlite/)
 
 add_executable(dnsc dnsc.c)
