@@ -1,6 +1,4 @@
 dnsproxy
-sqlite
-t1
-t1.c
+sqlite3
 dnsproxy.cfg
 
