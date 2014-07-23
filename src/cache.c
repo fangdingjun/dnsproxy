@@ -1,10 +1,23 @@
+/*
+#============================================
+# Filename:
+#    cache.c
+# Author:
+#    fangdingjun@gmail.com
+# License:
+#   GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+# Description:
+#   cache the dns resource record on sqlite in-memory database
+#============================================
+*/
+
+
 #include <stdio.h>
 #if WIN32
 #include <ws2tcpip.h>           /* for socklen_t  on ldns.h */
 #endif
 #include <sqlite3.h>
 #include <ldns/ldns.h>
-#include "dns.h"
 #include "dnsproxy.h"
 
 extern int loglevel;
