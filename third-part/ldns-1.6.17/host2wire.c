@@ -27,7 +27,53 @@ ldns_status
 ldns_dname2buffer_wire(ldns_buffer *buffer, const ldns_rdf *name)
 {
 	if (ldns_buffer_reserve(buffer, ldns_rdf_size(name))) {
-		ldns_buffer_write(buffer, ldns_rdf_data(name), ldns_rdf_size(name));
+
+        // 2014-07-23
+        // add by  fangdingjun@gmail.com
+        // add pointer to buffer output
+        
+        char *s1, *s2;
+        int dlen; /* dname length */
+        int blen; /* buffer length */
+        int i;
+        int has_pointer = 0;
+        s1 = (char *)ldns_buffer_begin(buffer);
+        s2 = (char *)ldns_rdf_data(name);
+        dlen = ldns_rdf_size(name);
+        blen = ldns_buffer_position(buffer);
+
+        /* search for exists dname */
+        for (i=0; i <= (blen - dlen); i++){
+            if (s1[i] == *s2){
+                /* first byte match, and check other */
+                if(memcmp(&s1[i], s2, dlen) == 0){/* found */
+                    char d[2];
+                    uint16_t l;
+
+                    /* offset */
+                    l = ((char *)&s1[i]) - s1;
+
+                    /* convert to network byte order */
+                    *((uint16_t *)&d[0]) = htons(l);
+
+                    /* add pointer flag */
+                    d[0] |= 0xc0;
+
+                    /* write pointer to buffer */
+                    ldns_buffer_write(buffer, d, 2);
+
+                    //fprintf(stderr, "write pointer to buffer\n");
+                    //
+                    has_pointer = 1;
+                    break;
+                }
+            }
+        }
+
+        /* no pointer found, write raw data */
+        if (!has_pointer){
+            ldns_buffer_write(buffer, ldns_rdf_data(name), ldns_rdf_size(name));
+        }
 	}
 	return ldns_buffer_status(buffer);
 }
@@ -36,7 +82,15 @@ ldns_status
 ldns_rdf2buffer_wire(ldns_buffer *buffer, const ldns_rdf *rdf)
 {
 	if (ldns_buffer_reserve(buffer, ldns_rdf_size(rdf))) {
-		ldns_buffer_write(buffer, ldns_rdf_data(rdf), ldns_rdf_size(rdf));
+        if (ldns_rdf_get_type(rdf) == LDNS_RDF_TYPE_DNAME){
+            /* add by fangdingjun@gmail.com
+             * may be to use pointer to compress
+             */
+            ldns_dname2buffer_wire(buffer, rdf);
+
+        }else{
+            ldns_buffer_write(buffer, ldns_rdf_data(rdf), ldns_rdf_size(rdf));
+        }
 	}
 	return ldns_buffer_status(buffer);
 }
