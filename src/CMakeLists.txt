@@ -70,7 +70,7 @@ add_library(ldns
     ../third-part/ldns-1.6.17/compat/timegm.c
 )
 
-add_definitions( -DVERSION="\\"0.1.1\\"")
+#add_definitions( -DVERSION="\\"0.1.1\\"")
 add_library(sqlite
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.c
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3.h
@@ -86,13 +86,10 @@ include_directories( ${dnsproxy_SOURCE_DIR}/third-part/sqlite/)
 
 add_executable(dnsc dnsc.c)
 
-#add_executable(dnsproxy dnsproxy.c dnsutil.c parse_cfg.c dnsproxy.h cache.c)
-
-#target_link_libraries(dnsproxy ldns sqlite)
 target_link_libraries(dnsc ldns)
+
 if(WIN32)
     target_link_libraries(dnsc ws2_32)
-    #target_link_libraries(dnsproxy ws2_32)
 else()
     #target_link_libraries(dnsproxy dl pthread)
 endif()
@@ -103,6 +100,7 @@ add_executable(sqlite3
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/shell.c
     ${dnsproxy_SOURCE_DIR}/third-part/sqlite/sqlite3ext.h
     )
+
 target_link_libraries(sqlite3 sqlite)
 
 if(WIN32)
@@ -112,9 +110,11 @@ else()
 endif()
 
 add_executable(dnsproxy 
-    dnsproxy_ldns.c
+    dnsproxy.c
     parse_cfg.c
-    cache2.c
+    cache.c
+    cache.h
+    dnsproxy.h
 )
 
 target_link_libraries(dnsproxy ldns sqlite)
