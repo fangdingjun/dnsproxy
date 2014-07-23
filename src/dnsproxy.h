@@ -30,16 +30,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#ifdef USE_EPOLL                /* epoll */
-#include <sys/epoll.h>
-#elif defined USE_SELECT        /* select */
-#ifndef WIN32
-#include <sys/select.h>
-#endif
-#else
-# error "undefined IO model, please define USE_SELECT or USE_EPOLL macro!!!"
-#endif
-
 #include <time.h>
 
 enum arg_t {
@@ -59,18 +49,6 @@ int get_blackip(char *filename, char **ips);
 char *skip_space_at_begin(char *p);
 char *skip_space_at_end(char *p);
 int parse_cfg(char *filename, struct arg_map *args);
-
-
-struct msg_data {
-    int listen_fd;              /* the socket fd to listen */
-    struct sockaddr_in client_addr; /* client socket address */
-    char msg_buf[512];          /* message buffer from client */
-    int msg_len;                /* the message length */
-    int status;                 /* status, 0 for unused, 1 for used */
-    int srv_fd;                 /* the server socket fd */
-    int fd;                     /* listen fd or server fd */
-    time_t last_active;         /* the time for request in */
-};
 
 #define LOG_DEBUG 4
 #define LOG_INFO 3
@@ -117,12 +95,5 @@ struct msg_data {
  }while(0)
 
 #define close closesocket
-#endif
-
-int recv_from_client(struct msg_data *d);
-int send_to_server(struct msg_data *d);
-int recv_from_server(struct msg_data *d);
-int send_to_client(struct msg_data *d, char *msg, int msg_len);
-int free_timeout_client();
-
-#endif
+#endif /* end win32 */
+#endif /* end DNSPROXY_H */
