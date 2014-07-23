@@ -1,4 +1,4 @@
-dnsutil
+dnsproxy
 =======
 
 this is a dns proxy server written by C
