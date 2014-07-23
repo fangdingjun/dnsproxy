@@ -2,14 +2,15 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.60])
-AC_INIT([dnsutil], [1.0], [fandingjun@gmail.com])
-AC_CONFIG_SRCDIR([src/dns.h])
+AC_INIT([dnsproxy], [0.5], [fandingjun@gmail.com])
+AC_CONFIG_SRCDIR([src/dnsproxy.h])
 AC_CONFIG_HEADERS([config.h])
 
 # Checks for programs.
 AC_PROG_CC
 AC_CANONICAL_HOST
 AM_PROG_CC_C_O
+AC_PROG_RANLIB
 #AC_DISABLE_SHARED
 #AC_PROG_LIBTOOL
 AM_INIT_AUTOMAKE(1.0)
