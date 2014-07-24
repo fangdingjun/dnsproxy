@@ -23,69 +23,138 @@
   every dname part could be added to it
 */
 
-ldns_status
-ldns_dname2buffer_wire(ldns_buffer *buffer, const ldns_rdf *name)
+
+/* match the dname, fully or partly 
+ * return -1 means not matched, 0 - full matched
+ * greater than zero means partly matched
+ */
+int match_dname(const char *src, const char *m, int len)
 {
-	if (ldns_buffer_reserve(buffer, ldns_rdf_size(name))) {
+    uint8_t label_len = 0;
+    int dname_found = 0;
+    int dname_left = 0;
+
+    label_len = *m;
+
+    while (label_len != 0) {
+        if (*src == *m) {
+            if (memcmp(src, m, len - dname_left) == 0) {
+                dname_found = 1;
+                break;
+            }
+        }
+        m += (label_len + 1);
+        dname_left += (label_len + 1);
+        label_len = *m;
+    }
+    if (dname_found) {
+        return dname_left;
+    }
+
+    return -1;
+}
+
+/* match the full dname
+ * return 0 means not matched
+ * greater than zero means matched
+ */
+int match_dname_full(const char *src, const char *m, int srclen, int mlen)
+{
+    int i;
+    for (i = 12; i <= (srclen - mlen); i++) {
+        if (src[i] == m[0]) {
+            if (memcmp(&src[i], m, mlen) == 0) {
+                return ((char *) &src[i] - src);
+            }
+        }
+    }
+    return 0;
+}
+
+/* search dname in buffer
+ * return the pointer at matched point
+ * mlen will changed to offset of m when partly matched
+ */
+char *search_dname(const char *src, const char *m, int srclen, int *mlen)
+{
+    int i;
+    int l;
+
+    /* skip header */
+    for (i = 12; i <= (srclen - (*mlen)); i++) {
+        if ((l = match_dname(&src[i], m, *mlen)) >= 0) {
+            *mlen = l;
+            return ((char *) &src[i]);
+        }
+    }
+    *mlen = -1;
+    return NULL;
+}
+
+ldns_status
+ldns_dname2buffer_wire(ldns_buffer * buffer, const ldns_rdf * name)
+{
+    if (ldns_buffer_reserve(buffer, ldns_rdf_size(name))) {
 
         // 2014-07-23
         // add by  fangdingjun@gmail.com
         // add pointer to buffer output
-        
+
         char *s1, *s2;
-        int dlen; /* dname length */
-        int blen; /* buffer length */
-        int i;
-        int has_pointer = 0;
-        s1 = (char *)ldns_buffer_begin(buffer);
-        s2 = (char *)ldns_rdf_data(name);
+        int dlen;               /* dname length */
+        int blen;               /* buffer length */
+        int pos;
+        char *p;
+        s1 = (char *) ldns_buffer_begin(buffer);
+        s2 = (char *) ldns_rdf_data(name);
         dlen = ldns_rdf_size(name);
         blen = ldns_buffer_position(buffer);
+        pos = dlen;
 
-        /* search for exists dname */
-        for (i=0; i <= (blen - dlen); i++){
-            if (s1[i] == *s2){
-                /* first byte match, and check other */
-                if(memcmp(&s1[i], s2, dlen) == 0){/* found */
-                    char d[2];
-                    uint16_t l;
+        p = search_dname(s1, s2, blen, &pos);
+        if (p != NULL) {        /* dname found */
+            uint16_t offset = p - s1;
+            if (pos == 0) {     /* dname full matched */
+                char d[2];
+                *((uint16_t *) & d[0]) = htons(offset);
+                d[0] |= 0xc0;
+                ldns_buffer_write(buffer, d, 2);
+            } else {            /* partly match */
+                char d[100];
+                int offset1;
+                memcpy(d, s2, pos);
+                *((uint16_t *) & d[pos]) = htons(offset);
+                d[pos] |= 0xc0;
 
-                    /* offset */
-                    l = ((char *)&s1[i]) - s1;
-
-                    /* convert to network byte order */
-                    *((uint16_t *)&d[0]) = htons(l);
-
-                    /* add pointer flag */
-                    d[0] |= 0xc0;
-
-                    /* write pointer to buffer */
-                    ldns_buffer_write(buffer, d, 2);
-
-                    //fprintf(stderr, "write pointer to buffer\n");
-                    //
-                    has_pointer = 1;
-                    break;
+                offset1 = match_dname_full(s1, d, blen, pos + 2);
+                if (offset1 > 0) {  /* dname + pointer was found in buffer */
+                    char d1[2];
+                    *((uint16_t *) & d1[0]) = htons(offset1);
+                    d1[0] |= 0xc0;
+                    /* write single pointer to buffer */
+                    ldns_buffer_write(buffer, d1, 2);
+                } else {
+                    /* write dname + pointer to buffer */
+                    ldns_buffer_write(buffer, d, pos + 2);
                 }
             }
+        } else {
+            /* dname not found, write raw data */
+            ldns_buffer_write(buffer, ldns_rdf_data(name),
+                              ldns_rdf_size(name));
         }
-
-        /* no pointer found, write raw data */
-        if (!has_pointer){
-            ldns_buffer_write(buffer, ldns_rdf_data(name), ldns_rdf_size(name));
-        }
-	}
-	return ldns_buffer_status(buffer);
+    }
+    return ldns_buffer_status(buffer);
 }
 
 ldns_status
 ldns_rdf2buffer_wire(ldns_buffer *buffer, const ldns_rdf *rdf)
 {
 	if (ldns_buffer_reserve(buffer, ldns_rdf_size(rdf))) {
+        /* add by fangdingjun@gmail.com
+         * process dname pointer
+         */
         if (ldns_rdf_get_type(rdf) == LDNS_RDF_TYPE_DNAME){
-            /* add by fangdingjun@gmail.com
-             * may be to use pointer to compress
-             */
             ldns_dname2buffer_wire(buffer, rdf);
 
         }else{
