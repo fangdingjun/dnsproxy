@@ -49,12 +49,15 @@ ldns_dname2buffer_wire(ldns_buffer *buffer, const ldns_rdf *name)
                 if(memcmp(&s1[i], s2, dlen) == 0){/* found */
                     char d[2];
                     uint16_t l;
+                    char *p1;
 
                     /* offset */
                     l = ((char *)&s1[i]) - s1;
 
+                    p1 = d;
+
                     /* convert to network byte order */
-                    *((uint16_t *)&d[0]) = htons(l);
+                    *((uint16_t *)p1) = htons(l);
 
                     /* add pointer flag */
                     d[0] |= 0xc0;
