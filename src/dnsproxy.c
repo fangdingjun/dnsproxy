@@ -239,7 +239,7 @@ int free_timeout_client()
     now = time(NULL);
     for (i = 0; i < MAX_CLIENT; i++) {
         if (clients[i].status == 1) {
-            if ((now - clients[i].last_time) > 3) {
+            if ((now - clients[i].last_time) > 2) {
                 DBG("close socket %d\n", clients[i].srv_sock);
                 close(clients[i].srv_sock);
                 clients[i].status = 0;
@@ -420,7 +420,9 @@ int send_to_server(struct client *c, const uint8_t * data)
         c->status = 0;
         return -1;
     }
-
+    
+    DBG("create srv socket success, fd = %d\n", sock);
+    
     set_udp_sock_option(sock);
 
     i = 0;
@@ -430,7 +432,7 @@ int send_to_server(struct client *c, const uint8_t * data)
         if (sendto(sock, (char *) data, c->msg_len, 0,
                (struct sockaddr *) &srv_addr, sizeof(srv_addr)
             ) < 0){
-            log_err("send to server failed");
+            ERR("send to server %s:53 failed", servers[i]);
         }
         i++;
     }
@@ -447,6 +449,7 @@ inline int check_listen_fd(int listen_fd, fd_set * r)
     if (FD_ISSET(listen_fd, r)) {
         c = get_free_client();
         if (c == NULL) {
+            free_timeout_client();
             return -1;
         }
 
@@ -494,7 +497,7 @@ int process_srv_response(struct client *c)
 {
     //uint8_t *data = NULL;
     //size_t s = 0;
-    size_t s1 = 512;
+    int s1 = 512;
     ldns_pkt *p = NULL;
     ldns_buffer *b = NULL;
 
@@ -591,7 +594,9 @@ int process_srv_response(struct client *c)
     c->status = 0;
 
     close(c->srv_sock);
-
+    
+    DBG("close socket %d\n", c->srv_sock);
+    
     ret = 0;
 
   err1:
