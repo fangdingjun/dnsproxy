@@ -427,12 +427,37 @@ int send_to_server(struct client *c, const uint8_t * data)
 
     i = 0;
     while (servers[i] != NULL) {
-        srv_addr.sin_addr.s_addr = inet_addr(servers[i]);
-        DBG("send to server %s:%d\n", servers[i], 53);
+        char ip[20];
+        uint32_t port = 53;
+        char *p = NULL;
+
+        /* has '@' ? */
+        p=strchr(servers[i], '@');
+        if (p){
+            /* read addr and port */
+            sscanf(servers[i], "%[^@]%*[^0-9]%d", ip, &port);
+            srv_addr.sin_addr.s_addr = inet_addr(ip);
+        }else{
+            srv_addr.sin_addr.s_addr = inet_addr(servers[i]);
+        }
+        
+        /* set port */
+        srv_addr.sin_port = htons(port);
+
+        if (p){
+            DBG("send to server %s:%d\n", ip, port);
+        }else{
+            DBG("send to server %s:%d\n", servers[i], port);
+        }
+
         if (sendto(sock, (char *) data, c->msg_len, 0,
                (struct sockaddr *) &srv_addr, sizeof(srv_addr)
             ) < 0){
-            ERR("send to server %s:53 failed", servers[i]);
+            if (p){
+                ERR("send to server %s:%d failed", ip, port);
+            }else{
+                ERR("send to server %s:%d failed", servers[i], port);
+            }
         }
         i++;
     }
