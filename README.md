@@ -100,3 +100,19 @@ Example:
     ./dnsc -s 8.8.8.8 www.google.com
     ./dnsc -s 4.2.2.2 www.google.com
     ./dnsc -t MX gmail.com
+    
+##License
+
+This software is pulished under GPLv3,
+see [License](https://raw.githubusercontent.com/fangdingjun/dnsproxy/master/LICENSE) for details.
+
+The third-part libraries has its own license.
+
+we use `ldns` library to parse the dns request and response,
+use `sqlite` to cache the dns result
+
+sqlite is  from [www.sqlite.org](http://www.sqlite.org)
+see license [www.sqlite.org/copyright.html](http://www.sqlite.org/copyright.html)
+
+ldns is from
+[http://www.nlnetlabs.nl/ldns/](http://www.nlnetlabs.nl/ldns/)
