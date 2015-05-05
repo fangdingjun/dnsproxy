@@ -1,24 +1,25 @@
 dnsproxy
 =======
 
-this is a dns proxy server written by C
+This is a dns proxy server written by C.
 
-the server have some features:
-  1. speedup the dns query
+It has some features:
 
-    forward the client dns request to more than one dns servers and get the fastest response
-  2. have a ip blacklist
-  
-    don't forward the response to the client when the response ip is in the ip blacklist
-  
-for DNS cache pollution, refer to
+1. speedup the dns query
+       forward the client dns request to more than one dns servers and get the fastest response.
+2. have a ip blacklist
+        don't forward the response to the client when the response ip is in the ip blacklist.
+
+When use blacklist, you can drop the fake ip and ISP's ad ip, the blacklist is under your control.
+
+For DNS cache pollution, refer to
 <link>http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93</link>
 
 ##requirement
 
 
  dnsproxy does not depend on the other libraries
- 
+
 
 ##compile
 
@@ -36,15 +37,17 @@ to use cmake, run command:
     cd build
     cmake ..
     make
- 
+
 ###Windows
-on Windows, you comilie it to mingw with cmake, MSVC is not support, run follow command to compile:
+on Windows, you compile it to use mingw with cmake, MSVC is not support.
+
+ Run follow command to compile:
 
     mkdir build
     cd build
     cmake -G "MinGW Makefiles" ..
     mingw32-make
-    
+
 ##dns server
 
 ### dnsproxy
@@ -58,14 +61,14 @@ you can simple run
 or sudo ./dnsproxy -c dnsproxy.cfg to special a configure file
 
 use ./dnsproxy -h to show more options
-    
+
 test the server with this command on linux
 
     dig @127.0.0.1 twitter.com
 or this command on windows
 
     nslookup twitter.com 127.0.0.1
-            
+
 you can set your system dns to 127.0.0.1
 
 ###config file
@@ -80,7 +83,7 @@ this is a sample configure file
     daemon = 1
     logfile = dnsproxy.log
     loglevel = 3
-    
+
 ###dnsclient
 
 there is a dns test client, named dnsc
