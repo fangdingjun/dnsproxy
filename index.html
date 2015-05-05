@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Dnsproxy by fangdingjun</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Dnsproxy</h1>
+      <h2 class="project-tagline">a dns proxy server</h2>
+      <a href="https://github.com/fangdingjun/dnsproxy" class="btn">View on GitHub</a>
+      <a href="https://github.com/fangdingjun/dnsproxy/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/fangdingjun/dnsproxy/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h1>
+<a id="dnsproxy" class="anchor" href="#dnsproxy" aria-hidden="true"><span class="octicon octicon-link"></span></a>dnsproxy</h1>
+
+<p>This is a dns proxy server written by C.</p>
+
+<p>It has some features:</p>
+
+<ol>
+<li>speedup the dns query
+   forward the client dns request to more than one dns servers and get the fastest response.</li>
+<li>have a ip blacklist
+    don't forward the response to the client when the response ip is in the ip blacklist.</li>
+</ol>
+
+<p>When use blacklist, you can drop the fake ip and ISP's ad ip, the blacklist is under your control.</p>
+
+<p>For DNS cache pollution, refer to
+<a href="http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93">http://zh.wikipedia.org/wiki/%E5%9F%9F%E5%90%8D%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BC%93%E5%AD%98%E6%B1%A1%E6%9F%93</a></p>
+
+<h2>
+<a id="requirement" class="anchor" href="#requirement" aria-hidden="true"><span class="octicon octicon-link"></span></a>requirement</h2>
+
+<p>dnsproxy does not depend on the other libraries</p>
+
+<h2>
+<a id="compile" class="anchor" href="#compile" aria-hidden="true"><span class="octicon octicon-link"></span></a>compile</h2>
+
+<h3>
+<a id="linux" class="anchor" href="#linux" aria-hidden="true"><span class="octicon octicon-link"></span></a>Linux</h3>
+
+<p>on Linux, you can compile it with cmake or GNU automake</p>
+
+<p>to use GNU automake, run command:</p>
+
+<pre><code>./gen.sh
+ make
+</code></pre>
+
+<p>to use cmake, run command:</p>
+
+<pre><code>mkdir build
+cd build
+cmake ..
+make
+</code></pre>
+
+<h3>
+<a id="windows" class="anchor" href="#windows" aria-hidden="true"><span class="octicon octicon-link"></span></a>Windows</h3>
+
+<p>on Windows, you compile it to use mingw with cmake, MSVC is not support.</p>
+
+<p>Run follow command to compile:</p>
+
+<pre><code>mkdir build
+cd build
+cmake -G "MinGW Makefiles" ..
+mingw32-make
+</code></pre>
+
+<h2>
+<a id="dns-server" class="anchor" href="#dns-server" aria-hidden="true"><span class="octicon octicon-link"></span></a>dns server</h2>
+
+<h3>
+<a id="dnsproxy-1" class="anchor" href="#dnsproxy-1" aria-hidden="true"><span class="octicon octicon-link"></span></a>dnsproxy</h3>
+
+<p>To run dnsproxy server, you need superuser privilege to listen on port 53</p>
+
+<p>you can simple run</p>
+
+<pre><code>sudo ./dnsproxy
+</code></pre>
+
+<p>or sudo ./dnsproxy -c dnsproxy.cfg to special a configure file</p>
+
+<p>use ./dnsproxy -h to show more options</p>
+
+<p>test the server with this command on linux</p>
+
+<pre><code>dig @127.0.0.1 twitter.com
+</code></pre>
+
+<p>or this command on windows</p>
+
+<pre><code>nslookup twitter.com 127.0.0.1
+</code></pre>
+
+<p>you can set your system dns to 127.0.0.1</p>
+
+<h3>
+<a id="config-file" class="anchor" href="#config-file" aria-hidden="true"><span class="octicon octicon-link"></span></a>config file</h3>
+
+<p>the default configure is dnsproxy.cfg at current director, or you can use -c to special a other configure file</p>
+
+<p>this is a sample configure file</p>
+
+<pre><code>listen_ip = 127.0.0.1
+listen_port = 53
+servers = 192.168.1.1,8.8.8.8,202.180.160.1,202.45.84.59,202.45.84.67
+blacklist= iplist.txt
+daemon = 1
+logfile = dnsproxy.log
+loglevel = 3
+</code></pre>
+
+<h3>
+<a id="dnsclient" class="anchor" href="#dnsclient" aria-hidden="true"><span class="octicon octicon-link"></span></a>dnsclient</h3>
+
+<p>there is a dns test client, named dnsc</p>
+
+<p>Usage:</p>
+
+<pre><code>./dnsc [-t type] [-s dnsserver] domain
+</code></pre>
+
+<p>Example:</p>
+
+<pre><code>./dnsc www.google.com
+./dnsc -t AAAA www.google.com
+./dnsc -t A www.google.com
+./dnsc -s 8.8.8.8 www.google.com
+./dnsc -s 4.2.2.2 www.google.com
+./dnsc -t MX gmail.com
+</code></pre>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/fangdingjun/dnsproxy">Dnsproxy</a> is maintained by <a href="https://github.com/fangdingjun">fangdingjun</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
+
