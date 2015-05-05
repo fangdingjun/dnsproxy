@@ -111,8 +111,8 @@ The third-part libraries has its own license.
 we use `ldns` library to parse the dns request and response,
 use `sqlite` to cache the dns result
 
-sqlite is  from [www.sqlite.org](http://www.sqlite.org)
-see license [www.sqlite.org/copyright.html](http://www.sqlite.org/copyright.html)
+sqlite is  from [www.sqlite.org](http://www.sqlite.org),
+see [license](http://www.sqlite.org/copyright.html)
 
 ldns is from
 [http://www.nlnetlabs.nl/ldns/](http://www.nlnetlabs.nl/ldns/)
